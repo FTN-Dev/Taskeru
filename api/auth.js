@@ -18,18 +18,26 @@ module.exports = async (req, res) => {
     if (req.method === 'POST' && action === 'register') {
       const { username, email, password } = req.body;
       
+      console.log('Registration attempt:', { username, email });
+      
       if (!username || !email || !password) {
         return res.status(400).json({ error: 'Semua field harus diisi' });
       }
 
-      // Check if user already exists
-      const { data: existingUser, error: checkError } = await supabase
+      // Check if user already exists - FIXED QUERY
+      const { data: existingUsers, error: checkError } = await supabase
         .from('users')
         .select('id')
-        .or(`username.eq.${username},email.eq.${email}`)
-        .single();
+        .or(`username.eq.${username},email.eq.${email}`);
 
-      if (existingUser) {
+      console.log('Existing users check:', existingUsers, checkError);
+
+      if (checkError) {
+        console.error('Check error:', checkError);
+        return res.status(500).json({ error: 'Database error: ' + checkError.message });
+      }
+
+      if (existingUsers && existingUsers.length > 0) {
         return res.status(400).json({ error: 'Username atau Email sudah digunakan' });
       }
 
@@ -42,6 +50,8 @@ module.exports = async (req, res) => {
         created_at: new Date().toISOString()
       };
 
+      console.log('Creating user:', newUser);
+
       const { data, error } = await supabase
         .from('users')
         .insert([newUser])
@@ -49,9 +59,11 @@ module.exports = async (req, res) => {
         .single();
 
       if (error) {
-        console.error('Registration error:', error);
-        return res.status(500).json({ error: 'Error server: ' + error.message });
+        console.error('Insert error:', error);
+        return res.status(500).json({ error: 'Error membuat user: ' + error.message });
       }
+
+      console.log('User created successfully:', data);
 
       return res.json({ 
         success: true, 
@@ -92,6 +104,6 @@ module.exports = async (req, res) => {
     res.status(404).json({ error: 'Endpoint not found' });
   } catch (error) {
     console.error('Auth error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error: ' + error.message });
   }
 };
