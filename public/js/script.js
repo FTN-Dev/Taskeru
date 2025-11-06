@@ -1,0 +1,901 @@
+/* ========= Data Layer ========= */
+const db = {
+  tasks: [],
+  projects: [{ id: "inbox", name: "Inbox", builtin: true }],
+  prefs: { theme: "dark", lastTab: "all" }
+};
+
+// Load data dari server
+async function load() {
+  try {
+    const [tasksRes, projectsRes] = await Promise.all([
+      fetch('/api/tasks'),
+      fetch('/api/projects')
+    ]);
+    
+    if (tasksRes.ok) {
+      db.tasks = await tasksRes.json();
+    }
+    
+    if (projectsRes.ok) {
+      const serverProjects = await projectsRes.json();
+      // Gabungkan dengan built-in projects
+      db.projects = [
+        { id: "inbox", name: "Inbox", builtin: true },
+        ...serverProjects.filter(p => !p.builtin)
+      ];
+    }
+    
+    // Load preferences dari localStorage
+    const prefs = localStorage.getItem('taskeru_prefs');
+    if (prefs) {
+      db.prefs = { ...db.prefs, ...JSON.parse(prefs) };
+    }
+    
+  } catch (e) {
+    console.warn("Failed to load:", e);
+    // Fallback ke data dummy untuk testing
+    if (db.tasks.length === 0) {
+      db.tasks = [
+        makeTask("Contoh tugas pertama", { due: todayStr(), priority: 2 }),
+        makeTask("Tugas penting", { due: offsetDate(1), priority: 3, project: "inbox" })
+      ];
+    }
+  }
+}
+
+// Save data ke server
+async function save() {
+  try {
+    // Simpan preferences ke localStorage
+    localStorage.setItem('taskeru_prefs', JSON.stringify(db.prefs));
+  } catch (e) {
+    console.warn("Failed to save preferences:", e);
+  }
+}
+
+// Helper functions
+function uid() { return Math.random().toString(36).slice(2, 10); }
+function todayStr() { return new Date().toISOString().slice(0,10); }
+function offsetDate(days) {
+  const d = new Date(); 
+  d.setDate(d.getDate()+days);
+  return d.toISOString().slice(0,10);
+}
+
+function makeTask(title, opts={}) {
+  return {
+    id: uid(),
+    title: title.trim(),
+    desc: (opts.desc || "").trim(),
+    due: opts.due || "",
+    priority: Number(opts.priority || 2),
+    project: opts.project || "inbox",
+    completed: !!opts.completed,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+}
+
+/* ========= DOM refs ========= */
+const els = {
+  sidebar: document.querySelector(".sidebar"),
+  sidebarToggle: document.getElementById("sidebarToggle"),
+  addProjectBtn: document.getElementById("addProjectBtn"),
+  projectList: document.getElementById("projectList"),
+  toggleTheme: document.getElementById("toggleTheme"),
+  searchInput: document.getElementById("searchInput"),
+  sortSelect: document.getElementById("sortSelect"),
+  groupSelect: document.getElementById("groupSelect"),
+  addTaskBtn: document.getElementById("addTaskBtn"),
+  ctaAddTask: document.getElementById("ctaAddTask"),
+  viewTitle: document.getElementById("viewTitle"),
+  taskContainer: document.getElementById("taskContainer"),
+  emptyState: document.getElementById("emptyState"),
+  clearCompleted: document.getElementById("clearCompleted"),
+  bulkBar: document.getElementById("bulkBar"),
+  selectedCount: document.getElementById("selectedCount"),
+  bulkComplete: document.getElementById("bulkComplete"),
+  bulkMove: document.getElementById("bulkMove"),
+  bulkDelete: document.getElementById("bulkDelete"),
+  bulkClear: document.getElementById("bulkClear"),
+  filterHigh: document.getElementById("filterHigh"),
+  filterOverdue: document.getElementById("filterOverdue"),
+  statsText: document.getElementById("statsText"),
+  exportJson: document.getElementById("exportJson"),
+  importJson: document.getElementById("importJson"),
+  importFile: document.getElementById("importFile"),
+  // tabs
+  tabs: Array.from(document.querySelectorAll(".tab")),
+  // modal: task
+  taskModal: document.getElementById("taskModal"),
+  taskForm: document.getElementById("taskForm"),
+  taskModalTitle: document.getElementById("taskModalTitle"),
+  taskTitle: document.getElementById("taskTitle"),
+  taskDesc: document.getElementById("taskDesc"),
+  taskDue: document.getElementById("taskDue"),
+  taskPriority: document.getElementById("taskPriority"),
+  taskProject: document.getElementById("taskProject"),
+  taskCancel: document.getElementById("taskCancel"),
+  taskSave: document.getElementById("taskSave"),
+  taskId: document.getElementById("taskId"),
+  // modal: project
+  projectModal: document.getElementById("projectModal"),
+  projectForm: document.getElementById("projectForm"),
+  projectName: document.getElementById("projectName"),
+  projectCancel: document.getElementById("projectCancel"),
+  projectSave: document.getElementById("projectSave"),
+  // modal: move
+  moveModal: document.getElementById("moveModal"),
+  moveProjectSelect: document.getElementById("moveProjectSelect"),
+  moveCancel: document.getElementById("moveCancel"),
+  moveSave: document.getElementById("moveSave"),
+  // template
+  taskItemTemplate: document.getElementById("taskItemTemplate")
+};
+
+/* ========= State ========= */
+let state = {
+  tab: "all",
+  query: "",
+  sort: "created_desc",
+  group: "none",
+  filterHigh: false,
+  filterOverdue: false,
+  selection: new Set() // selected task ids (bulk)
+};
+
+/* ========= Init ========= */
+function init() {
+  load().then(() => {
+    applyTheme(db.prefs.theme || "dark");
+    state.tab = db.prefs.lastTab || "all";
+
+    // Set initial values for selects
+    els.sortSelect.value = state.sort;
+    els.groupSelect.value = state.group;
+
+    renderProjects();
+    renderAll();
+    wireEvents();
+    updateStats();
+    
+    console.log("Initialized with tasks:", db.tasks.length);
+  });
+}
+
+/* ========= Rendering ========= */
+function renderProjects() {
+  // fill project select in modal
+  els.taskProject.innerHTML = "";
+  db.projects.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.name + (p.builtin ? " (default)" : "");
+    els.taskProject.appendChild(opt);
+  });
+  
+  // fill move project select
+  els.moveProjectSelect.innerHTML = "";
+  db.projects.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.name;
+    els.moveProjectSelect.appendChild(opt);
+  });
+  
+  // sidebar list
+  els.projectList.innerHTML = "";
+  db.projects.forEach(p => {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.className = "ghost-btn";
+    btn.textContent = "View";
+    btn.addEventListener("click", () => {
+      state.query = `project:${p.id}`;
+      els.searchInput.value = state.query;
+      renderAll();
+    });
+
+    const span = document.createElement("span");
+    span.className = "name";
+    span.textContent = p.name;
+    li.appendChild(span);
+
+    if (!p.builtin) {
+      const del = document.createElement("button");
+      del.className = "icon-btn";
+      del.title = "Delete project";
+      del.textContent = "🗑";
+      del.addEventListener("click", () => {
+        if (db.tasks.some(t => t.project === p.id)) {
+          if (!confirm("Project berisi tugas. Hapus project akan memindahkan tugas ke Inbox. Lanjut?")) return;
+          db.tasks.forEach(t => { if (t.project === p.id) t.project = "inbox"; });
+        }
+        db.projects = db.projects.filter(x => x.id !== p.id);
+        save(); renderProjects(); renderAll();
+      });
+      const wrap = document.createElement("div");
+      wrap.style.display="flex"; wrap.style.gap="6px";
+      wrap.appendChild(btn); wrap.appendChild(del);
+      li.appendChild(wrap);
+    } else {
+      li.appendChild(btn);
+    }
+    els.projectList.appendChild(li);
+  });
+}
+
+function renderAll() {
+  console.log("Rendering tasks:", db.tasks);
+  
+  // Tabs active state & title
+  els.tabs.forEach(b => b.classList.toggle("active", b.dataset.tab === state.tab));
+  const titles = { all:"All Tasks", today:"Today", upcoming:"Upcoming", completed:"Completed" };
+  els.viewTitle.textContent = titles[state.tab] || "Tasks";
+
+  // Filter pipeline
+  let items = db.tasks.slice();
+
+  // tab filters
+  const today = todayStr();
+  if (state.tab === "today") items = items.filter(t => (t.due || "") === today && !t.completed);
+  if (state.tab === "upcoming") items = items.filter(t => (t.due || "") > today && !t.completed);
+  if (state.tab === "completed") items = items.filter(t => t.completed);
+  if (state.tab === "all") items = items;
+
+  // quick filters
+  if (state.filterHigh) items = items.filter(t => t.priority === 3);
+  if (state.filterOverdue) items = items.filter(t => (t.due && t.due < today) && !t.completed);
+
+  // search / query: support "project:ID" and plain text
+  const q = (state.query || "").trim().toLowerCase();
+  if (q) {
+    if (q.startsWith("project:")) {
+      const pid = q.split(":")[1];
+      items = items.filter(t => t.project === pid);
+    } else {
+      items = items.filter(t =>
+        t.title.toLowerCase().includes(q) ||
+        (t.desc && t.desc.toLowerCase().includes(q))
+      );
+    }
+  }
+
+  // sort
+  items.sort((a,b)=>{
+    switch(state.sort){
+      case "created_desc": return b.createdAt - a.createdAt;
+      case "created_asc": return a.createdAt - b.createdAt;
+      case "due_asc": return (a.due||"9999-12-31").localeCompare(b.due||"9999-12-31");
+      case "due_desc": return (b.due||"0000-01-01").localeCompare(a.due||"0000-01-01");
+      case "priority_desc": return b.priority - a.priority;
+      case "priority_asc": return a.priority - b.priority;
+      default: return 0;
+    }
+  });
+
+  // group
+  const groups = groupItems(items, state.group);
+
+  // render
+  els.taskContainer.innerHTML = "";
+  const hasAny = items.length > 0;
+  els.emptyState.hidden = hasAny;
+  els.taskContainer.hidden = !hasAny;
+
+  if (Object.keys(groups).length === 0) {
+    // If no groups, create a default one
+    groups["Tasks"] = items;
+  }
+
+  Object.entries(groups).forEach(([label, arr])=>{
+    const group = document.createElement("div");
+    group.className = "group" + (arr.length===0 ? " empty":"");
+    const header = document.createElement("header");
+    header.innerHTML = `<span>${label}</span><span>${arr.length} item</span>`;
+    const list = document.createElement("div");
+    list.className = "list";
+    
+    if (arr.length === 0) {
+      list.textContent = "Tidak ada tugas pada grup ini.";
+      list.style.maxHeight = "none";
+      list.style.overflow = "visible";
+    } else {
+      list.style.maxHeight = "400px";
+      list.style.overflowY = "auto";
+      arr.forEach(task => list.appendChild(renderTask(task)));
+    }
+    
+    group.appendChild(header); 
+    group.appendChild(list);
+    els.taskContainer.appendChild(group);
+  });
+
+  // update bulk bar
+  updateBulkBar();
+  updateStats();
+}
+
+function groupItems(items, mode){
+  if (mode === "none") return { "Tasks": items };
+  const map = {};
+  
+  const ensure = (k)=> {
+    if (!map[k]) map[k] = [];
+    return map[k];
+  };
+  
+  if (mode === "project") {
+    items.forEach(t=>{
+      const p = db.projects.find(x=>x.id===t.project);
+      ensure(p ? p.name : "Unknown").push(t);
+    });
+  } else if (mode === "priority") {
+    const label = p => p===3?"High":p===2?"Normal":"Low";
+    items.forEach(t=> ensure(label(t.priority)).push(t));
+  } else if (mode === "due") {
+    const label = (d)=>{
+      if (!d) return "No due date";
+      const today = todayStr();
+      if (d < today) return "Overdue";
+      if (d === today) return "Today";
+      return d;
+    };
+    items.forEach(t=> ensure(label(t.due)).push(t));
+  }
+  
+  return map;
+}
+
+function renderTask(t){
+  const tpl = els.taskItemTemplate.content.firstElementChild.cloneNode(true);
+  const root = tpl;
+  if (t.completed) root.classList.add("completed");
+
+  const sel = root.querySelector(".selectBox");
+  const cb  = root.querySelector(".checkBox");
+  const title = root.querySelector(".title");
+  const badge = root.querySelector(".badge.priority");
+  const due = root.querySelector(".due");
+  const project = root.querySelector(".project");
+  const editBtn = root.querySelector(".editBtn");
+  const delBtn = root.querySelector(".delBtn");
+
+  // selection
+  sel.checked = state.selection.has(t.id);
+  sel.addEventListener("change", ()=>{
+    if (sel.checked) state.selection.add(t.id); 
+    else state.selection.delete(t.id);
+    updateBulkBar();
+  });
+
+  // complete checkbox
+  cb.checked = t.completed;
+  cb.addEventListener("change", ()=>{
+    t.completed = cb.checked;
+    t.updatedAt = Date.now();
+    save();
+    renderAll();
+  });
+
+  // title + badge
+  title.textContent = t.title || "Untitled Task";
+  badge.textContent = t.priority===3?"High":t.priority===2?"Normal":"Low";
+  badge.classList.add(`p${t.priority}`);
+
+  // subline
+  due.textContent = t.due ? `Due ${formatDate(t.due)}` : "No due";
+  const projectName = db.projects.find(p=>p.id===t.project)?.name || "Unknown";
+  project.textContent = projectName;
+
+  // edit/delete
+  editBtn.addEventListener("click", ()=> openTaskModal(t));
+  delBtn.addEventListener("click", ()=> deleteTask(t.id));
+
+  return root;
+}
+
+/* ========= Events & Modals ========= */
+function wireEvents(){
+  // tabs
+  els.tabs.forEach(b=>{
+    b.addEventListener("click", ()=>{
+      state.tab = b.dataset.tab;
+      db.prefs.lastTab = state.tab; 
+      save();
+      renderAll();
+    });
+  });
+
+  // search
+  els.searchInput.addEventListener("input", debounce((e)=>{
+    state.query = e.target.value;
+    renderAll();
+  }, 300));
+
+  // sort/group
+  els.sortSelect.addEventListener("change", e=>{ 
+    state.sort = e.target.value; 
+    renderAll(); 
+  });
+  els.groupSelect.addEventListener("change", e=>{ 
+    state.group = e.target.value; 
+    renderAll(); 
+  });
+
+  // quick filters
+  els.filterHigh.addEventListener("change", e=>{ 
+    state.filterHigh = e.target.checked; 
+    renderAll(); 
+  });
+  els.filterOverdue.addEventListener("change", e=>{ 
+    state.filterOverdue = e.target.checked; 
+    renderAll(); 
+  });
+
+  // add task
+  els.addTaskBtn.addEventListener("click", ()=> openTaskModal());
+  els.ctaAddTask.addEventListener("click", ()=> openTaskModal());
+
+  // keyboard shortcuts
+  window.addEventListener("keydown", (e)=>{
+    if (e.target.matches("input, textarea, select")) return;
+    if (e.key.toLowerCase()==="n" && !e.ctrlKey){ 
+      e.preventDefault();
+      openTaskModal(); 
+    }
+    if (e.key==="/"){ 
+      e.preventDefault(); 
+      els.searchInput.focus(); 
+    }
+    if (e.key==="Escape"){
+      if (state.selection.size > 0) {
+        state.selection.clear();
+        updateBulkBar();
+      }
+    }
+  });
+
+  // task modal
+  els.taskCancel.addEventListener("click", ()=> els.taskModal.close());
+  els.taskForm.addEventListener("submit", onTaskSave);
+
+  // project modal
+  els.addProjectBtn.addEventListener("click", ()=> openProjectModal());
+  els.projectCancel.addEventListener("click", ()=> els.projectModal.close());
+  els.projectForm.addEventListener("submit", onProjectSave);
+
+  // move modal
+  els.moveCancel.addEventListener("click", ()=> els.moveModal.close());
+  els.moveForm.addEventListener("submit", onBulkMoveSave);
+
+  // clear completed
+  els.clearCompleted.addEventListener("click", ()=>{
+    const before = db.tasks.length;
+    db.tasks = db.tasks.filter(t=>!t.completed);
+    state.selection.clear();
+    if (db.tasks.length !== before) save();
+    renderAll();
+  });
+
+  // bulk actions
+  els.bulkComplete.addEventListener("click", ()=>{
+    db.tasks.forEach(t=>{ 
+      if (state.selection.has(t.id)) {
+        t.completed = true;
+        t.updatedAt = Date.now();
+      }
+    });
+    save(); 
+    renderAll();
+  });
+  
+  els.bulkMove.addEventListener("click", openBulkMoveModal);
+  
+  els.bulkDelete.addEventListener("click", ()=>{
+    if (!confirm(`Hapus ${state.selection.size} tugas terpilih?`)) return;
+    
+    // Convert Set to Array for safe iteration
+    const selectedIds = Array.from(state.selection);
+    selectedIds.forEach(taskId => {
+      deleteTask(taskId, false); // false = jangan renderAll setiap kali
+    });
+    
+    state.selection.clear();
+    renderAll(); // Render sekali saja setelah semua delete selesai
+  });
+  
+  els.bulkClear.addEventListener("click", ()=>{ 
+    state.selection.clear(); 
+    updateBulkBar(); 
+  });
+
+  // theme
+  els.toggleTheme.addEventListener("click", ()=>{
+    const next = (db.prefs.theme==="dark") ? "light" : "dark";
+    applyTheme(next); 
+    db.prefs.theme = next; 
+    save();
+  });
+
+  // sidebar mobile
+  els.sidebarToggle.addEventListener("click", ()=>{
+    els.sidebar.classList.toggle("open");
+  });
+
+  // export/import
+  els.exportJson.addEventListener("click", ()=>{
+    const data = {
+      tasks: db.tasks,
+      projects: db.projects.filter(p => !p.builtin),
+      exportDate: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; 
+    a.download = `taskeru-backup-${todayStr()}.json`; 
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  
+  els.importJson.addEventListener("click", ()=> els.importFile.click());
+  els.importFile.addEventListener("change", async (e)=>{
+    const file = e.target.files[0]; 
+    if (!file) return;
+    
+    if (!confirm("Import data akan mengganti data yang ada. Lanjut?")) {
+      e.target.value = "";
+      return;
+    }
+    
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.tasks || !data.projects) throw new Error("Invalid file format");
+      
+      Object.assign(db, data);
+      // Ensure inbox project exists
+      if (!db.projects.find(p => p.id === "inbox")) {
+        db.projects.unshift({ id: "inbox", name: "Inbox", builtin: true });
+      }
+      
+      save(); 
+      renderProjects(); 
+      renderAll();
+      alert(`Berhasil import ${data.tasks.length} tasks dan ${data.projects.length} projects`);
+    } catch (err) {
+      alert("Gagal import: " + err.message);
+    }
+    e.target.value = "";
+  });
+
+  // sidebar close
+  const sidebarClose = document.getElementById("sidebarClose");
+  if (sidebarClose) {
+    sidebarClose.addEventListener("click", () => {
+      els.sidebar.classList.remove("open");
+    });
+  }
+
+  // Close sidebar when clicking outside (mobile)
+  document.addEventListener("click", (e) => {
+    if (window.innerWidth <= 900 && 
+        !els.sidebar.contains(e.target) && 
+        !els.sidebarToggle.contains(e.target)) {
+      els.sidebar.classList.remove("open");
+    }
+  });
+
+  // Close modals on backdrop click
+  document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.close();
+      }
+    });
+  });
+}
+
+function updateStats(){
+  const total = db.tasks.length;
+  const done = db.tasks.filter(t=>t.completed).length;
+  const left = total - done;
+  const overdue = db.tasks.filter(t => t.due && t.due < todayStr() && !t.completed).length;
+  
+  let stats = `${total} total • ${done} selesai • ${left} tersisa`;
+  if (overdue > 0) {
+    stats += ` • ${overdue} overdue`;
+  }
+  
+  els.statsText.textContent = stats;
+}
+
+function updateBulkBar(){
+  const n = state.selection.size;
+  els.selectedCount.textContent = `${n} selected`;
+  els.bulkBar.hidden = n===0;
+}
+
+function openTaskModal(task=null){
+  // fill projects select
+  renderProjects();
+
+  if (task){
+    els.taskModalTitle.textContent = "Edit Tugas";
+    els.taskId.value = task.id;
+    els.taskTitle.value = task.title;
+    els.taskDesc.value = task.desc || "";
+    els.taskDue.value = task.due || "";
+    els.taskPriority.value = String(task.priority);
+    els.taskProject.value = task.project || "inbox";
+  } else {
+    els.taskModalTitle.textContent = "Tambah Tugas";
+    els.taskId.value = "";
+    els.taskTitle.value = "";
+    els.taskDesc.value = "";
+    // Set default due date to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    els.taskDue.value = tomorrow.toISOString().split('T')[0];
+    els.taskPriority.value = "2";
+    els.taskProject.value = "inbox";
+  }
+  els.taskModal.showModal();
+  setTimeout(()=> els.taskTitle.focus(), 0);
+}
+
+async function onTaskSave(e){
+  e.preventDefault();
+  const payload = {
+    title: els.taskTitle.value,
+    desc: els.taskDesc.value,
+    due: els.taskDue.value,
+    priority: Number(els.taskPriority.value),
+    project: els.taskProject.value
+  };
+  
+  const id = els.taskId.value;
+  
+  if (!payload.title.trim()) {
+    alert("Judul tugas tidak boleh kosong!");
+    return;
+  }
+
+  try {
+    if (id){
+      // Update existing task
+      const response = await fetch(`/api/tasks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) throw new Error('Failed to update task');
+      
+      // Update local data
+      const t = db.tasks.find(x=>x.id===id);
+      if (t){
+        Object.assign(t, payload, { updatedAt: Date.now() });
+      }
+    } else {
+      // Create new task
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) throw new Error('Failed to create task');
+      
+      const result = await response.json();
+      const newTask = makeTask(payload.title, { ...payload, id: result.id });
+      db.tasks.push(newTask);
+    }
+    
+    els.taskModal.close();
+    save();
+    renderAll();
+    
+  } catch (error) {
+    console.error('Error saving task:', error);
+    // Fallback to local storage jika server error
+    if (id){
+      const t = db.tasks.find(x=>x.id===id);
+      if (t){
+        Object.assign(t, payload, { updatedAt: Date.now() });
+      }
+    } else {
+      const newTask = makeTask(payload.title, payload);
+      db.tasks.push(newTask);
+    }
+    save();
+    renderAll();
+    els.taskModal.close();
+  }
+}
+
+function openProjectModal(){
+  els.projectName.value = "";
+  els.projectModal.showModal();
+  setTimeout(()=> els.projectName.focus(), 0);
+}
+
+async function onProjectSave(e){
+  e.preventDefault();
+  const name = els.projectName.value.trim();
+  if (!name) {
+    alert("Nama project tidak boleh kosong!");
+    return;
+  }
+  
+  // Check if project already exists
+  if (db.projects.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+    alert("Project dengan nama tersebut sudah ada!");
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    
+    if (!response.ok) throw new Error('Failed to create project');
+    
+    const result = await response.json();
+    db.projects.push({ id: result.id, name });
+    
+    renderProjects();
+    els.projectModal.close();
+    
+  } catch (error) {
+    console.error('Error creating project:', error);
+    // Fallback to local storage
+    const newProject = { id: uid(), name };
+    db.projects.push(newProject);
+    save();
+    renderProjects();
+    els.projectModal.close();
+  }
+}
+
+function openBulkMoveModal() {
+  // Fill project select for bulk move
+  renderProjects();
+  els.moveModal.showModal();
+}
+
+async function onBulkMoveSave(e) {
+  e.preventDefault();
+  const projectId = els.moveProjectSelect.value;
+  
+  if (!projectId) {
+    alert("Pilih project terlebih dahulu!");
+    return;
+  }
+
+  try {
+    // Update tasks in bulk
+    const updatePromises = [];
+    db.tasks.forEach(t => {
+      if (state.selection.has(t.id)) {
+        t.project = projectId;
+        t.updatedAt = Date.now();
+        
+        // Also update on server
+        updatePromises.push(
+          fetch(`/api/tasks/${t.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project: projectId })
+          }).catch(err => {
+            console.error(`Failed to update task ${t.id}:`, err);
+            // Continue even if server update fails
+          })
+        );
+      }
+    });
+
+    await Promise.all(updatePromises);
+    save();
+    els.moveModal.close();
+    renderAll();
+    
+  } catch (error) {
+    console.error('Error moving tasks:', error);
+    // Fallback to local storage
+    db.tasks.forEach(t => {
+      if (state.selection.has(t.id)) {
+        t.project = projectId;
+        t.updatedAt = Date.now();
+      }
+    });
+    save();
+    els.moveModal.close();
+    renderAll();
+  }
+}
+
+async function deleteTask(taskId, shouldRender = true) {
+  if (!confirm("Hapus tugas ini?")) return;
+  
+  try {
+    const response = await fetch(`/api/tasks/${taskId}`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) throw new Error('Failed to delete task');
+    
+    // Remove from local data
+    db.tasks = db.tasks.filter(x => x.id !== taskId);
+    state.selection.delete(taskId);
+    
+    if (shouldRender) {
+      save();
+      renderAll();
+    }
+    
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    // Fallback to local storage
+    db.tasks = db.tasks.filter(x => x.id !== taskId);
+    state.selection.delete(taskId);
+    
+    if (shouldRender) {
+      save();
+      renderAll();
+    }
+  }
+}
+
+/* ========= Helpers ========= */
+function applyTheme(mode){
+  if (mode === "light") {
+    document.documentElement.classList.add("light");
+  } else {
+    document.documentElement.classList.remove("light");
+  }
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  
+  const date = new Date(dateStr);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  if (date.toDateString() === today.toDateString()) {
+    return 'Today';
+  } else if (date.toDateString() === tomorrow.toDateString()) {
+    return 'Tomorrow';
+  } else {
+    return date.toLocaleDateString('id-ID', { 
+      day: 'numeric', 
+      month: 'short' 
+    });
+  }
+}
+
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// Initialize the app when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+  // Only initialize if we're on the dashboard page
+  if (document.querySelector('.app')) {
+    init();
+  }
+});
