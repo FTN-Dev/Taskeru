@@ -1,0 +1,17 @@
+{
+  "name": "taskeru-vercel",
+  "version": "1.0.0",
+  "description": "Task Management App on Vercel + Supabase",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev",
+    "build": "echo 'No build step required'"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
