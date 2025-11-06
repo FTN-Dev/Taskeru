@@ -134,6 +134,65 @@ const els = {
   taskItemTemplate: document.getElementById("taskItemTemplate")
 };
 
+/* ========= Auth Helpers ========= */
+function getCurrentUser() {
+    const user = localStorage.getItem('taskeru_user');
+    return user ? JSON.parse(user) : null;
+}
+
+function getAuthHeaders() {
+    const user = getCurrentUser();
+    return {
+        'Content-Type': 'application/json',
+        'X-User-Id': user?.id || ''
+    };
+}
+
+function checkAuth() {
+    const user = getCurrentUser();
+    if (!user) {
+        window.location.href = '/login.html';
+        return false;
+    }
+    return true;
+}
+
+// Update function load()
+async function load() {
+  if (!checkAuth()) return;
+  
+  try {
+    const [tasksRes, projectsRes] = await Promise.all([
+      fetch('/api/tasks', { headers: getAuthHeaders() }),
+      fetch('/api/projects', { headers: getAuthHeaders() })
+    ]);
+    
+    if (tasksRes.ok) {
+      db.tasks = await tasksRes.json();
+    } else if (tasksRes.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    }
+    
+    if (projectsRes.ok) {
+      const serverProjects = await projectsRes.json();
+      db.projects = [
+        { id: "inbox", name: "Inbox", builtin: true },
+        ...serverProjects.filter(p => !p.builtin)
+      ];
+    }
+    
+    // Load preferences dari localStorage
+    const prefs = localStorage.getItem('taskeru_prefs');
+    if (prefs) {
+      db.prefs = { ...db.prefs, ...JSON.parse(prefs) };
+    }
+    
+  } catch (e) {
+    console.warn("Failed to load:", e);
+  }
+}
+
 /* ========= State ========= */
 let state = {
   tab: "all",

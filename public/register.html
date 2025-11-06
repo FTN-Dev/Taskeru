@@ -21,15 +21,15 @@
       
       <div id="register-message" class="message"></div>
       
-      <form action="/register" method="POST" class="auth-form">
+      <form id="registerForm" class="auth-form">
         <div class="form-group">
-          <input type="text" name="username" placeholder="Username" required class="form-input">
+          <input type="text" name="username" placeholder="Username" required class="form-input" id="regUsername">
         </div>
         <div class="form-group">
-          <input type="email" name="email" placeholder="Email" required class="form-input">
+          <input type="email" name="email" placeholder="Email" required class="form-input" id="regEmail">
         </div>
         <div class="form-group">
-          <input type="password" name="password" placeholder="Password" required class="form-input">
+          <input type="password" name="password" placeholder="Password" required class="form-input" id="regPassword">
         </div>
         <button type="submit" class="auth-btn primary-btn">Daftar Sekarang</button>
       </form>
@@ -57,21 +57,82 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      const messageEl = document.getElementById('register-message');
+      const registerForm = document.getElementById('registerForm');
+
+      // Handle URL parameters
       const urlParams = new URLSearchParams(window.location.search);
       const error = urlParams.get('error');
       const success = urlParams.get('success');
-      const messageEl = document.getElementById('register-message');
       
       if (error) {
-        messageEl.textContent = decodeURIComponent(error);
-        messageEl.className = 'message error';
-        messageEl.style.display = 'block';
+        showMessage(decodeURIComponent(error), 'error');
       }
       
       if (success) {
-        messageEl.textContent = decodeURIComponent(success);
-        messageEl.className = 'message success';
+        showMessage(decodeURIComponent(success), 'success');
+      }
+
+      // Handle form submission
+      registerForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const username = document.getElementById('regUsername').value;
+        const email = document.getElementById('regEmail').value;
+        const password = document.getElementById('regPassword').value;
+        
+        if (!username || !email || !password) {
+          showMessage('Semua field harus diisi', 'error');
+          return;
+        }
+
+        // Validasi email sederhana
+        if (!email.includes('@')) {
+          showMessage('Format email tidak valid', 'error');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/auth?action=register', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, email, password })
+          });
+
+          const result = await response.json();
+
+          if (response.ok && result.success) {
+            showMessage(result.message || 'Registrasi berhasil! Silakan login.', 'success');
+            
+            // Clear form
+            registerForm.reset();
+            
+            // Redirect ke login setelah 2 detik
+            setTimeout(() => {
+              window.location.href = 'login.html?success=Registrasi berhasil! Silakan login.';
+            }, 2000);
+          } else {
+            showMessage(result.error || 'Registrasi gagal', 'error');
+          }
+        } catch (error) {
+          console.error('Registration error:', error);
+          showMessage('Terjadi kesalahan saat registrasi', 'error');
+        }
+      });
+
+      function showMessage(text, type) {
+        messageEl.textContent = text;
+        messageEl.className = `message ${type}`;
         messageEl.style.display = 'block';
+        
+        // Auto hide success messages after 5 seconds
+        if (type === 'success') {
+          setTimeout(() => {
+            messageEl.style.display = 'none';
+          }, 5000);
+        }
       }
     });
   </script>

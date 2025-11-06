@@ -240,6 +240,24 @@
       </div>
     </div>
   </template>
-  <script src="js/script.js"></script>
+  <script src="js/script.js">
+    // Check authentication on dashboard load
+  document.addEventListener('DOMContentLoaded', function() {
+    const user = JSON.parse(localStorage.getItem('taskeru_user'));
+    if (!user) {
+      window.location.href = '/login.html';
+      return;
+    }
+    
+    // Handle logout
+    document.querySelector('.logout-btn').addEventListener('click', function(e) {
+      e.preventDefault();
+      localStorage.removeItem('taskeru_user');
+      localStorage.removeItem('taskeru_token');
+      localStorage.removeItem('taskeru_prefs');
+      window.location.href = '/login.html';
+    });
+  });
+  </script>
 </body>
 </html>

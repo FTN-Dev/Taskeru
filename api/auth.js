@@ -23,7 +23,7 @@ module.exports = async (req, res) => {
       }
 
       // Check if user already exists
-      const { data: existingUser } = await supabase
+      const { data: existingUser, error: checkError } = await supabase
         .from('users')
         .select('id')
         .or(`username.eq.${username},email.eq.${email}`)
@@ -33,12 +33,12 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: 'Username atau Email sudah digunakan' });
       }
 
-      // Create user in users table (without Supabase Auth untuk simplifikasi)
+      // Create user
       const newUser = {
         id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36),
         username,
         email,
-        password, // Note: Dalam production, hash password dulu!
+        password, // Note: Dalam production sebaiknya di-hash
         created_at: new Date().toISOString()
       };
 
@@ -50,7 +50,7 @@ module.exports = async (req, res) => {
 
       if (error) {
         console.error('Registration error:', error);
-        return res.status(500).json({ error: 'Error server' });
+        return res.status(500).json({ error: 'Error server: ' + error.message });
       }
 
       return res.json({ 
@@ -72,14 +72,14 @@ module.exports = async (req, res) => {
         .from('users')
         .select('*')
         .eq('username', username)
-        .eq('password', password) // Note: Dalam production, gunakan hash!
+        .eq('password', password)
         .single();
 
       if (error || !user) {
         return res.status(401).json({ error: 'Username atau password salah' });
       }
 
-      // Create simple session (dalam production gunakan JWT)
+      // Create session token
       const sessionToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
       
       return res.json({ 
@@ -87,15 +87,6 @@ module.exports = async (req, res) => {
         user: { id: user.id, username: user.username, email: user.email },
         sessionToken 
       });
-    }
-
-    // Check session
-    if (req.method === 'GET' && action === 'check') {
-      const sessionToken = req.headers.authorization?.replace('Bearer ', '');
-      if (!sessionToken) {
-        return res.status(401).json({ error: 'No session' });
-      }
-      return res.json({ valid: true }); // Simplified
     }
 
     res.status(404).json({ error: 'Endpoint not found' });

@@ -21,12 +21,12 @@
       
       <div id="login-message" class="message"></div>
       
-      <form action="/login" method="POST" class="auth-form">
+      <form id="loginForm" class="auth-form">
         <div class="form-group">
-          <input type="text" name="username" placeholder="Username" required class="form-input">
+          <input type="text" name="username" placeholder="Username" required class="form-input" id="username">
         </div>
         <div class="form-group">
-          <input type="password" name="password" placeholder="Password" required class="form-input">
+          <input type="password" name="password" placeholder="Password" required class="form-input" id="password">
         </div>
         <button type="submit" class="auth-btn primary-btn">Login</button>
       </form>
@@ -54,21 +54,74 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      const messageEl = document.getElementById('login-message');
+      const loginForm = document.getElementById('loginForm');
+
+      // Handle URL parameters untuk error/success messages
       const urlParams = new URLSearchParams(window.location.search);
       const error = urlParams.get('error');
       const success = urlParams.get('success');
-      const messageEl = document.getElementById('login-message');
       
       if (error) {
-        messageEl.textContent = decodeURIComponent(error);
-        messageEl.className = 'message error';
-        messageEl.style.display = 'block';
+        showMessage(decodeURIComponent(error), 'error');
       }
       
       if (success) {
-        messageEl.textContent = decodeURIComponent(success);
-        messageEl.className = 'message success';
+        showMessage(decodeURIComponent(success), 'success');
+      }
+
+      // Handle form submission
+      loginForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        
+        if (!username || !password) {
+          showMessage('Username dan password harus diisi', 'error');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/auth?action=login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, password })
+          });
+
+          const result = await response.json();
+
+          if (response.ok && result.success) {
+            // Simpan user data di localStorage
+            localStorage.setItem('taskeru_user', JSON.stringify(result.user));
+            localStorage.setItem('taskeru_token', result.sessionToken);
+            
+            showMessage('Login berhasil! Mengalihkan...', 'success');
+            setTimeout(() => {
+              window.location.href = 'dashboard.html';
+            }, 1000);
+          } else {
+            showMessage(result.error || 'Login gagal', 'error');
+          }
+        } catch (error) {
+          console.error('Login error:', error);
+          showMessage('Terjadi kesalahan saat login', 'error');
+        }
+      });
+
+      function showMessage(text, type) {
+        messageEl.textContent = text;
+        messageEl.className = `message ${type}`;
         messageEl.style.display = 'block';
+        
+        // Auto hide success messages after 3 seconds
+        if (type === 'success') {
+          setTimeout(() => {
+            messageEl.style.display = 'none';
+          }, 3000);
+        }
       }
     });
   </script>
