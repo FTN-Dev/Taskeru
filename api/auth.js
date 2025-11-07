@@ -1,4 +1,4 @@
-const supabase = require('../../database/supabase');
+const supabase = require('../../database/supabase.js');
 
 module.exports = async (req, res) => {
   // Set CORS headers
