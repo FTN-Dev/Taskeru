@@ -1,30 +1,25 @@
-// database/supabase.js
 const { createClient } = require('@supabase/supabase-js');
 
 console.log('🔧 Loading Supabase client...');
 
-// Manual Supabase credentials - GANTI DENGAN VALUE ANDA
+// MANUAL CREDENTIALS - GANTI DENGAN MILIK ANDA
 const supabaseUrl = 'https://qduqlhscmwfxtizaezqj.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkdXFsaHNjbXdmeHRpemFlenFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0MDA5MjUsImV4cCI6MjA3Nzk3NjkyNX0.gqC4dRucgJRoDVlElEIQfn0-Olro809jAZJk-JZjIvg'; 
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkdXFsaHNjbXdmeHRpemFlenFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0MDA5MjUsImV4cCI6MjA3Nzk3NjkyNX0.gqC4dRucgJRoDVlElEIQfn0-Olro809jAZJk-JZjIvg';
 
-// Atau tetap gunakan environment variables jika ada, fallback ke manual
-const finalSupabaseUrl = process.env.SUPABASE_URL || supabaseUrl;
-const finalSupabaseKey = process.env.SUPABASE_ANON_KEY || supabaseKey;
+console.log('🔧 Supabase URL:', supabaseUrl);
+console.log('🔧 Supabase Key:', supabaseKey ? 'Set' : 'Not set');
 
-console.log('🔧 Supabase URL:', finalSupabaseUrl ? 'Set' : 'Not set');
-console.log('🔧 Supabase Key:', finalSupabaseKey ? 'Set' : 'Not set');
-
-if (!finalSupabaseUrl || !finalSupabaseKey || finalSupabaseUrl.includes('your-project-id')) {
-  console.log('❌ Supabase credentials not properly configured');
-  console.log('🔧 Using mock Supabase client for testing');
+if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('your-project-id')) {
+  console.log('❌ Please update Supabase credentials in database/supabase.js');
+  console.log('🔧 Using mock Supabase client for now');
   
-  // Mock client untuk testing
+  // Mock client
   const mockClient = {
     from: (table) => ({
       select: (columns) => ({
         eq: (col, val) => {
           console.log(`🔧 Mock SELECT from ${table} where ${col} = ${val}`);
-          return Promise.resolve({ data: null, error: null });
+          return Promise.resolve({ data: [], error: null });
         },
         or: (condition) => {
           console.log(`🔧 Mock SELECT from ${table} with OR: ${condition}`);
@@ -32,60 +27,59 @@ if (!finalSupabaseUrl || !finalSupabaseKey || finalSupabaseUrl.includes('your-pr
         },
         single: () => {
           console.log(`🔧 Mock SELECT single from ${table}`);
-          return Promise.resolve({ data: null, error: { message: 'No user found' } });
-        }
+          return Promise.resolve({ data: null, error: { message: 'No data found' } });
+        },
+        order: (col, opts) => ({
+          eq: () => Promise.resolve({ data: [], error: null })
+        })
       }),
       insert: (data) => {
         console.log(`🔧 Mock INSERT into ${table}:`, data);
         return {
           select: () => ({
             single: () => Promise.resolve({ 
-              data: { 
-                id: 'mock-' + Date.now(), 
-                ...data[0],
-                created_at: new Date().toISOString()
-              }, 
+              data: data[0], 
               error: null 
             })
           })
         };
-      }
+      },
+      update: (data) => ({
+        eq: (col, val) => ({
+          select: () => ({
+            single: () => Promise.resolve({ 
+              data: { ...data, id: val }, 
+              error: null 
+            })
+          })
+        })
+      }),
+      delete: () => ({
+        eq: () => Promise.resolve({ data: null, error: null })
+      })
     })
   };
   
   module.exports = mockClient;
 } else {
-  console.log('✅ Using real Supabase client with manual credentials');
+  console.log('✅ Using real Supabase client');
   try {
-    const supabase = createClient(finalSupabaseUrl, finalSupabaseKey);
+    const supabase = createClient(supabaseUrl, supabaseKey);
     
     // Test connection
-    supabase.from('users').select('count', { count: 'exact', head: true })
+    supabase.from('projects').select('count', { count: 'exact', head: true })
       .then(result => {
-        console.log('✅ Supabase connection test:', result.error ? 'Error' : 'Success');
         if (result.error) {
-          console.error('❌ Supabase error:', result.error);
+          console.error('❌ Supabase connection error:', result.error);
+        } else {
+          console.log('✅ Supabase connected successfully');
         }
       });
     
     module.exports = supabase;
   } catch (error) {
     console.error('❌ Error creating Supabase client:', error);
-    // Fallback to mock client
-    console.log('🔧 Falling back to mock client');
-    module.exports = {
-      from: (table) => ({
-        select: () => ({
-          eq: () => Promise.resolve({ data: null, error: null }),
-          or: () => Promise.resolve({ data: [], error: null }),
-          single: () => Promise.resolve({ data: null, error: null })
-        }),
-        insert: (data) => ({
-          select: () => ({
-            single: () => Promise.resolve({ data: data[0], error: null })
-          })
-        })
-      })
-    };
+    // Fallback to mock
+    module.exports = { from: () => ({ /* mock methods */ }) };
   }
 }

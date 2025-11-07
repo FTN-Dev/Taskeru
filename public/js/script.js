@@ -7,19 +7,27 @@ const db = {
 
 // Load data dari server
 async function load() {
+  if (!checkAuth()) return;
+  
   try {
     const [tasksRes, projectsRes] = await Promise.all([
-      fetch('/api/tasks'),
-      fetch('/api/projects')
+      fetch('/api/tasks', { headers: getAuthHeaders() }),
+      fetch('/api/projects', { headers: getAuthHeaders() })
     ]);
     
     if (tasksRes.ok) {
-      db.tasks = await tasksRes.json();
+      const tasksData = await tasksRes.json();
+      db.tasks = tasksData;
+      console.log('✅ Loaded tasks from server:', tasksData.length);
+    } else if (tasksRes.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    } else {
+      console.warn('Failed to load tasks, using local data');
     }
     
     if (projectsRes.ok) {
       const serverProjects = await projectsRes.json();
-      // Gabungkan dengan built-in projects
       db.projects = [
         { id: "inbox", name: "Inbox", builtin: true },
         ...serverProjects.filter(p => !p.builtin)
@@ -33,7 +41,7 @@ async function load() {
     }
     
   } catch (e) {
-    console.warn("Failed to load:", e);
+    console.warn("Failed to load from server:", e);
     // Fallback ke data dummy untuk testing
     if (db.tasks.length === 0) {
       db.tasks = [
@@ -49,13 +57,14 @@ async function save() {
   try {
     // Simpan preferences ke localStorage
     localStorage.setItem('taskeru_prefs', JSON.stringify(db.prefs));
+    console.log('💾 Saved preferences to localStorage');
   } catch (e) {
     console.warn("Failed to save preferences:", e);
   }
 }
 
 // Helper functions
-function uid() { return Math.random().toString(36).slice(2, 10); }
+function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
 function todayStr() { return new Date().toISOString().slice(0,10); }
 function offsetDate(days) {
   const d = new Date(); 
@@ -64,16 +73,17 @@ function offsetDate(days) {
 }
 
 function makeTask(title, opts={}) {
+  const taskId = opts.id || uid();
   return {
-    id: uid(),
+    id: taskId,
     title: title.trim(),
     desc: (opts.desc || "").trim(),
     due: opts.due || "",
     priority: Number(opts.priority || 2),
     project: opts.project || "inbox",
     completed: !!opts.completed,
-    createdAt: Date.now(),
-    updatedAt: Date.now()
+    createdAt: opts.createdAt || Date.now(),
+    updatedAt: opts.updatedAt || Date.now()
   };
 }
 
@@ -157,42 +167,6 @@ function checkAuth() {
     return true;
 }
 
-// Update function load()
-async function load() {
-  if (!checkAuth()) return;
-  
-  try {
-    const [tasksRes, projectsRes] = await Promise.all([
-      fetch('/api/tasks', { headers: getAuthHeaders() }),
-      fetch('/api/projects', { headers: getAuthHeaders() })
-    ]);
-    
-    if (tasksRes.ok) {
-      db.tasks = await tasksRes.json();
-    } else if (tasksRes.status === 401) {
-      window.location.href = '/login.html';
-      return;
-    }
-    
-    if (projectsRes.ok) {
-      const serverProjects = await projectsRes.json();
-      db.projects = [
-        { id: "inbox", name: "Inbox", builtin: true },
-        ...serverProjects.filter(p => !p.builtin)
-      ];
-    }
-    
-    // Load preferences dari localStorage
-    const prefs = localStorage.getItem('taskeru_prefs');
-    if (prefs) {
-      db.prefs = { ...db.prefs, ...JSON.parse(prefs) };
-    }
-    
-  } catch (e) {
-    console.warn("Failed to load:", e);
-  }
-}
-
 /* ========= State ========= */
 let state = {
   tab: "all",
@@ -206,6 +180,9 @@ let state = {
 
 /* ========= Init ========= */
 function init() {
+  console.log('🚀 Initializing Taskeru...');
+  console.log('👤 Current user:', getCurrentUser());
+  
   load().then(() => {
     applyTheme(db.prefs.theme || "dark");
     state.tab = db.prefs.lastTab || "all";
@@ -219,7 +196,9 @@ function init() {
     wireEvents();
     updateStats();
     
-    console.log("Initialized with tasks:", db.tasks.length);
+    console.log("✅ Initialized with tasks:", db.tasks.length);
+  }).catch(error => {
+    console.error('❌ Initialization error:', error);
   });
 }
 
@@ -431,11 +410,27 @@ function renderTask(t){
 
   // complete checkbox
   cb.checked = t.completed;
-  cb.addEventListener("change", ()=>{
+  cb.addEventListener("change", async ()=>{
     t.completed = cb.checked;
     t.updatedAt = Date.now();
-    save();
-    renderAll();
+    
+    try {
+      const response = await fetch(`/api/tasks?id=${t.id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ completed: t.completed })
+      });
+      
+      if (!response.ok) throw new Error('Failed to update task');
+      
+      await save();
+      renderAll();
+    } catch (error) {
+      console.error('Error updating task completion:', error);
+      // Rollback visual
+      cb.checked = !t.completed;
+      t.completed = !t.completed;
+    }
   });
 
   // title + badge
@@ -722,44 +717,60 @@ async function onTaskSave(e){
     return;
   }
 
+  console.log('📤 Saving task:', { id, payload });
+
   try {
     if (id){
       // Update existing task
-      const response = await fetch(`/api/tasks/${id}`, {
+      const response = await fetch(`/api/tasks?id=${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
       
-      if (!response.ok) throw new Error('Failed to update task');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update task');
+      }
+      
+      const result = await response.json();
       
       // Update local data
       const t = db.tasks.find(x=>x.id===id);
       if (t){
-        Object.assign(t, payload, { updatedAt: Date.now() });
+        Object.assign(t, result.task);
       }
+      
+      console.log('✅ Task updated:', result.task.id);
     } else {
       // Create new task
       const response = await fetch('/api/tasks', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
       
-      if (!response.ok) throw new Error('Failed to create task');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create task');
+      }
       
       const result = await response.json();
-      const newTask = makeTask(payload.title, { ...payload, id: result.id });
+      const newTask = makeTask(payload.title, result.task);
       db.tasks.push(newTask);
+      
+      console.log('✅ Task created:', result.task.id);
     }
     
     els.taskModal.close();
-    save();
+    await save();
     renderAll();
     
   } catch (error) {
-    console.error('Error saving task:', error);
-    // Fallback to local storage jika server error
+    console.error('❌ Error saving task:', error);
+    alert('Gagal menyimpan task: ' + error.message);
+    
+    // Fallback ke localStorage untuk testing
     if (id){
       const t = db.tasks.find(x=>x.id===id);
       if (t){
@@ -769,7 +780,7 @@ async function onTaskSave(e){
       const newTask = makeTask(payload.title, payload);
       db.tasks.push(newTask);
     }
-    save();
+    await save();
     renderAll();
     els.taskModal.close();
   }
@@ -798,7 +809,7 @@ async function onProjectSave(e){
   try {
     const response = await fetch('/api/projects', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ name })
     });
     
@@ -836,43 +847,53 @@ async function onBulkMoveSave(e) {
     return;
   }
 
+  console.log('🚚 Bulk moving tasks to project:', projectId);
+
   try {
-    // Update tasks in bulk
     const updatePromises = [];
-    db.tasks.forEach(t => {
-      if (state.selection.has(t.id)) {
-        t.project = projectId;
-        t.updatedAt = Date.now();
-        
-        // Also update on server
-        updatePromises.push(
-          fetch(`/api/tasks/${t.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ project: projectId })
-          }).catch(err => {
-            console.error(`Failed to update task ${t.id}:`, err);
-            // Continue even if server update fails
-          })
-        );
-      }
+    const selectedTasks = db.tasks.filter(t => state.selection.has(t.id));
+    
+    // Update di server
+    selectedTasks.forEach(t => {
+      updatePromises.push(
+        fetch(`/api/tasks?id=${t.id}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ project: projectId })
+        }).catch(err => {
+          console.error(`Failed to update task ${t.id}:`, err);
+        })
+      );
     });
 
     await Promise.all(updatePromises);
-    save();
-    els.moveModal.close();
-    renderAll();
     
-  } catch (error) {
-    console.error('Error moving tasks:', error);
-    // Fallback to local storage
+    // Update local data
     db.tasks.forEach(t => {
       if (state.selection.has(t.id)) {
         t.project = projectId;
         t.updatedAt = Date.now();
       }
     });
-    save();
+    
+    await save();
+    els.moveModal.close();
+    renderAll();
+    
+    console.log('✅ Bulk move completed');
+    
+  } catch (error) {
+    console.error('❌ Error moving tasks:', error);
+    alert('Gagal memindahkan tasks: ' + error.message);
+    
+    // Fallback ke localStorage
+    db.tasks.forEach(t => {
+      if (state.selection.has(t.id)) {
+        t.project = projectId;
+        t.updatedAt = Date.now();
+      }
+    });
+    await save();
     els.moveModal.close();
     renderAll();
   }
@@ -881,30 +902,40 @@ async function onBulkMoveSave(e) {
 async function deleteTask(taskId, shouldRender = true) {
   if (!confirm("Hapus tugas ini?")) return;
   
+  console.log('🗑 Deleting task:', taskId);
+  
   try {
-    const response = await fetch(`/api/tasks/${taskId}`, {
-      method: 'DELETE'
+    const response = await fetch(`/api/tasks?id=${taskId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
     });
     
-    if (!response.ok) throw new Error('Failed to delete task');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to delete task');
+    }
     
     // Remove from local data
     db.tasks = db.tasks.filter(x => x.id !== taskId);
     state.selection.delete(taskId);
     
+    console.log('✅ Task deleted:', taskId);
+    
     if (shouldRender) {
-      save();
+      await save();
       renderAll();
     }
     
   } catch (error) {
-    console.error('Error deleting task:', error);
-    // Fallback to local storage
+    console.error('❌ Error deleting task:', error);
+    alert('Gagal menghapus task: ' + error.message);
+    
+    // Fallback ke localStorage
     db.tasks = db.tasks.filter(x => x.id !== taskId);
     state.selection.delete(taskId);
     
     if (shouldRender) {
-      save();
+      await save();
       renderAll();
     }
   }
@@ -953,6 +984,25 @@ function debounce(func, wait) {
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
+  // Check authentication on dashboard load
+  const user = JSON.parse(localStorage.getItem('taskeru_user'));
+  if (!user && document.querySelector('.app')) {
+    window.location.href = '/login.html';
+    return;
+  }
+  
+  // Handle logout
+  const logoutBtn = document.querySelector('.logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      localStorage.removeItem('taskeru_user');
+      localStorage.removeItem('taskeru_token');
+      localStorage.removeItem('taskeru_prefs');
+      window.location.href = '/login.html';
+    });
+  }
+
   // Only initialize if we're on the dashboard page
   if (document.querySelector('.app')) {
     init();

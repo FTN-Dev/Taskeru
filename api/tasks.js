@@ -1,6 +1,9 @@
 const supabase = require('../database/supabase');
 
 module.exports = async (req, res) => {
+  console.log('✅ Tasks endpoint hit:', req.method, req.url);
+  
+  // CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -12,7 +15,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // Simple auth check (dalam production gunakan JWT)
+    // Simple auth check
     const userId = req.headers['x-user-id'];
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -32,7 +35,7 @@ module.exports = async (req, res) => {
       }
 
       // Format data untuk kompatibilitas dengan frontend
-      const formattedTasks = data.map(task => ({
+      const formattedTasks = (data || []).map(task => ({
         id: task.id,
         title: task.title,
         desc: task.description,
@@ -51,12 +54,14 @@ module.exports = async (req, res) => {
       // Create new task
       const { title, desc, due, priority, project } = req.body;
       
+      console.log('📝 Creating task:', { title, project, userId });
+      
       if (!title || !title.trim()) {
         return res.status(400).json({ error: 'Task title is required' });
       }
 
       const newTask = {
-        id: Math.random().toString(36).slice(2, 10),
+        id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36),
         title: title.trim(),
         description: (desc || "").trim(),
         due_date: due || null,
@@ -76,9 +81,11 @@ module.exports = async (req, res) => {
 
       if (error) {
         console.error('Create task error:', error);
-        return res.status(500).json({ error: 'Failed to create task' });
+        return res.status(500).json({ error: 'Failed to create task: ' + error.message });
       }
 
+      console.log('✅ Task created:', data.id);
+      
       res.json({ 
         success: true, 
         id: data.id,
@@ -100,6 +107,8 @@ module.exports = async (req, res) => {
       // Update task
       const taskId = req.query.id;
       const { title, desc, due, priority, project, completed } = req.body;
+
+      console.log('📝 Updating task:', taskId, { title, project, completed });
 
       if (!taskId) {
         return res.status(400).json({ error: 'Task ID is required' });
@@ -128,9 +137,15 @@ module.exports = async (req, res) => {
 
       if (error) {
         console.error('Update task error:', error);
-        return res.status(500).json({ error: 'Failed to update task' });
+        return res.status(500).json({ error: 'Failed to update task: ' + error.message });
       }
 
+      if (!data) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+
+      console.log('✅ Task updated:', data.id);
+      
       res.json({ 
         success: true, 
         task: {
@@ -151,6 +166,8 @@ module.exports = async (req, res) => {
       // Delete task
       const taskId = req.query.id;
 
+      console.log('🗑 Deleting task:', taskId);
+
       if (!taskId) {
         return res.status(400).json({ error: 'Task ID is required' });
       }
@@ -163,15 +180,16 @@ module.exports = async (req, res) => {
 
       if (error) {
         console.error('Delete task error:', error);
-        return res.status(500).json({ error: 'Failed to delete task' });
+        return res.status(500).json({ error: 'Failed to delete task: ' + error.message });
       }
 
+      console.log('✅ Task deleted:', taskId);
       res.json({ success: true });
     }
 
     res.status(404).json({ error: 'Endpoint not found' });
   } catch (error) {
     console.error('Tasks API error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error: ' + error.message });
   }
 };
