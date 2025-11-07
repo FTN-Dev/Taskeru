@@ -1,6 +1,9 @@
+// api/login.js
 const supabase = require('../database/supabase');
 
 module.exports = async (req, res) => {
+  console.log('✅ Login endpoint hit');
+  
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -24,7 +27,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Username dan password harus diisi' });
     }
 
-    // Untuk testing, langsung return success
+    // Testing mode
     return res.json({ 
       success: true, 
       user: { 
@@ -35,28 +38,8 @@ module.exports = async (req, res) => {
       sessionToken: 'token-' + Date.now()
     });
 
-    /*
-    // Kode Supabase (comment dulu)
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('username', username)
-      .eq('password', password)
-      .single();
-
-    if (error || !user) {
-      return res.status(401).json({ error: 'Username atau password salah' });
-    }
-
-    return res.json({ 
-      success: true, 
-      user: { id: user.id, username: user.username, email: user.email },
-      sessionToken: 'token-' + Date.now()
-    });
-    */
-
   } catch (error) {
     console.error('❌ Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error: ' + error.message });
   }
 };
