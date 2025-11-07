@@ -27,13 +27,29 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Username dan password harus diisi' });
     }
 
-    // Testing mode
+    // GUNAKAN REAL SUPABASE - HAPUS TESTING MODE
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .eq('password', password)
+      .single();
+
+    console.log('🔍 Login query result:', { user, error });
+
+    if (error || !user) {
+      console.log('❌ Login failed - user not found or password wrong');
+      return res.status(401).json({ error: 'Username atau password salah' });
+    }
+
+    console.log('✅ Login successful for user:', user.username);
+
     return res.json({ 
       success: true, 
       user: { 
-        id: 'user-' + Date.now(), 
-        username, 
-        email: username + '@example.com' 
+        id: user.id, 
+        username: user.username, 
+        email: user.email 
       },
       sessionToken: 'token-' + Date.now()
     });
