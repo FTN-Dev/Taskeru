@@ -8,49 +8,56 @@
 </head>
 <body class="auth-page">
   <div class="auth-wrapper">
-    <div class="auth-header">
-      <div class="auth-logo">
-        <div class="logo">✓</div>
-        <h1>Taskeru</h1>
+    <!-- Bagian Kiri: Branding & Features -->
+    <div class="auth-brand-section">
+      <div class="auth-header">
+        <div class="auth-logo">
+          <div class="logo">✓</div>
+          <h1>Taskeru</h1>
+        </div>
+        <p class="auth-subtitle">Bergabung dan mulai mengatur tugasmu</p>
       </div>
-      <p class="auth-subtitle">Bergabung dan mulai mengatur tugasmu</p>
-    </div>
 
-    <div class="auth-container">
-      <h2>Daftar Akun Baru</h2>
-      
-      <div id="register-message" class="message"></div>
-      
-      <form id="registerForm" class="auth-form">
-        <div class="form-group">
-          <input type="text" name="username" placeholder="Username" required class="form-input" id="regUsername">
+      <div class="auth-features">
+        <div class="feature">
+          <span class="feature-icon">🚀</span>
+          <span class="feature-text">Mulai dalam hitungan detik</span>
         </div>
-        <div class="form-group">
-          <input type="email" name="email" placeholder="Email" required class="form-input" id="regEmail">
+        <div class="feature">
+          <span class="feature-icon">🔒</span>
+          <span class="feature-text">Data tersimpan dengan aman</span>
         </div>
-        <div class="form-group">
-          <input type="password" name="password" placeholder="Password" required class="form-input" id="regPassword">
+        <div class="feature">
+          <span class="feature-icon">💯</span>
+          <span class="feature-text">Gratis selamanya</span>
         </div>
-        <button type="submit" class="auth-btn primary-btn">Daftar Sekarang</button>
-      </form>
-      
-      <div class="auth-footer">
-        <p>Sudah punya akun? <a href="login.html" class="auth-link">Login di sini</a></p>
       </div>
     </div>
 
-    <div class="auth-features">
-      <div class="feature">
-        <span class="feature-icon">🚀</span>
-        <span class="feature-text">Mulai dalam hitungan detik</span>
-      </div>
-      <div class="feature">
-        <span class="feature-icon">🔒</span>
-        <span class="feature-text">Data tersimpan dengan aman</span>
-      </div>
-      <div class="feature">
-        <span class="feature-icon">💯</span>
-        <span class="feature-text">Gratis selamanya</span>
+    <!-- Bagian Kanan: Form Register -->
+    <div class="auth-form-section">
+      <div class="auth-container">
+        <h2>Daftar Akun Baru</h2>
+        <p class="subtitle">Buat akun Taskeru Anda</p>
+        
+        <div id="register-message" class="message"></div>
+        
+        <form id="registerForm" class="auth-form">
+          <div class="form-group">
+            <input type="text" name="username" placeholder="Username" required class="form-input" id="regUsername">
+          </div>
+          <div class="form-group">
+            <input type="email" name="email" placeholder="Email" required class="form-input" id="regEmail">
+          </div>
+          <div class="form-group">
+            <input type="password" name="password" placeholder="Password" required class="form-input" id="regPassword">
+          </div>
+          <button type="submit" class="auth-btn primary-btn">Daftar Sekarang</button>
+        </form>
+        
+        <div class="auth-footer">
+          <p>Sudah punya akun? <a href="login.html" class="auth-link">Login di sini</a></p>
+        </div>
       </div>
     </div>
   </div>
@@ -78,7 +85,7 @@
       try {
         console.log('🚀 Sending request to /api/register...');
         
-        const response = await fetch('/api/register', {  // ← PERUBAHAN: /api/register bukan /api/auth
+        const response = await fetch('/api/register', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
