@@ -10,51 +10,16 @@ async function load() {
   if (!checkAuth()) return;
   
   try {
-    const [tasksRes, projectsRes] = await Promise.all([
-      fetch('/api/tasks', { headers: getAuthHeaders() }),
-      fetch('/api/projects', { headers: getAuthHeaders() })
-    ]);
-    
-    if (tasksRes.ok) {
-      const tasksData = await tasksRes.json();
-      // Map data dari Supabase ke format aplikasi
-      db.tasks = tasksData.map(task => ({
-        id: task.id,
-        title: task.title,
-        desc: task.description || "",
-        due: task.due_date || "",
-        priority: task.priority || 2,
-        project: task.project_id || "inbox",
-        completed: task.completed || false,
-        createdAt: task.created_at || Date.now(),
-        updatedAt: task.updated_at || Date.now()
-      }));
-      console.log('✅ Loaded tasks from server:', db.tasks.length);
-    } else if (tasksRes.status === 401) {
-      window.location.href = '/login.html';
-      return;
-    } else {
-      console.warn('Failed to load tasks from server');
-    }
-    
-    if (projectsRes.ok) {
-      const serverProjects = await projectsRes.json();
-      // Gabungkan inbox default dengan projects dari server
-      db.projects = [
-        { id: "inbox", name: "Inbox", builtin: true },
-        ...serverProjects.filter(p => !p.builtin).map(p => ({
-          id: p.id,
-          name: p.name,
-          builtin: p.builtin || false
-        }))
-      ];
-      console.log('✅ Loaded projects from server:', db.projects.length);
-    }
-    
     // Load preferences dari localStorage
     const prefs = localStorage.getItem('taskeru_prefs');
     if (prefs) {
       db.prefs = { ...db.prefs, ...JSON.parse(prefs) };
+    }
+    
+    // Load tasks dari localStorage sebagai fallback
+    const savedTasks = localStorage.getItem('taskeru_tasks');
+    if (savedTasks) {
+      db.tasks = JSON.parse(savedTasks);
     }
     
   } catch (e) {
@@ -65,11 +30,12 @@ async function load() {
 // Save data ke server
 async function save() {
   try {
-    // Simpan preferences ke localStorage
+    // Simpan preferences dan tasks ke localStorage
     localStorage.setItem('taskeru_prefs', JSON.stringify(db.prefs));
-    console.log('💾 Saved preferences to localStorage');
+    localStorage.setItem('taskeru_tasks', JSON.stringify(db.tasks));
+    console.log('💾 Saved data to localStorage');
   } catch (e) {
-    console.warn("Failed to save preferences:", e);
+    console.warn("Failed to save data:", e);
   }
 }
 
@@ -144,20 +110,7 @@ function getCurrentUser() {
     return user ? JSON.parse(user) : null;
 }
 
-function getAuthHeaders() {
-    const user = getCurrentUser();
-    return {
-        'Content-Type': 'application/json',
-        'X-User-Id': user?.id || ''
-    };
-}
-
 function checkAuth() {
-    // const user = getCurrentUser();
-    // if (!user) {
-    //     window.location.href = '/login.html';
-    //     return false;
-    // }
     return true;
 }
 
@@ -174,7 +127,6 @@ let state = {
 /* ========= Init ========= */
 function init() {
   console.log('🚀 Initializing Taskeru...');
-  console.log('👤 Current user:', getCurrentUser());
   
   load().then(() => {
     applyTheme(db.prefs.theme || "dark");
@@ -306,7 +258,7 @@ function renderAll() {
   els.emptyState.hidden = hasAny;
   els.taskContainer.hidden = !hasAny;
 
-  if (Object.keys(groups).length === 0) {
+  if (Object.keys(groups).length === 0 && hasAny) {
     // If no groups, create a default one
     groups["Tasks"] = items;
   }
@@ -388,15 +340,6 @@ function renderTask(t){
     t.updatedAt = Date.now();
     
     try {
-      // Update di server
-      const response = await fetch(`/api/tasks?id=${t.id}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ completed: t.completed })
-      });
-      
-      if (!response.ok) throw new Error('Failed to update task');
-      
       await save();
       renderAll();
     } catch (error) {
@@ -426,6 +369,8 @@ function renderTask(t){
 
 /* ========= Events & Modals ========= */
 function wireEvents(){
+  console.log('🔌 Wiring events...');
+  
   // tabs
   els.tabs.forEach(b=>{
     b.addEventListener("click", ()=>{
@@ -462,9 +407,16 @@ function wireEvents(){
     renderAll(); 
   });
 
-  // add task
-  els.addTaskBtn.addEventListener("click", ()=> openTaskModal());
-  els.ctaAddTask.addEventListener("click", ()=> openTaskModal());
+  // add task - FIXED: Pastikan event listener terpasang
+  els.addTaskBtn.addEventListener("click", ()=> {
+    console.log('➕ Add task button clicked');
+    openTaskModal();
+  });
+  
+  els.ctaAddTask.addEventListener("click", ()=> {
+    console.log('➕ CTA Add task button clicked');
+    openTaskModal();
+  });
 
   // keyboard shortcuts
   window.addEventListener("keydown", (e)=>{
@@ -479,9 +431,16 @@ function wireEvents(){
     }
   });
 
-  // task modal
-  els.taskCancel.addEventListener("click", ()=> els.taskModal.close());
-  els.taskForm.addEventListener("submit", onTaskSave);
+  // task modal - FIXED: Pastikan form submit handler terpasang
+  els.taskCancel.addEventListener("click", ()=> {
+    console.log('❌ Task modal canceled');
+    els.taskModal.close();
+  });
+  
+  els.taskForm.addEventListener("submit", (e) => {
+    console.log('💾 Task form submitted');
+    onTaskSave(e);
+  });
 
   // project modal
   els.addProjectBtn.addEventListener("click", ()=> openProjectModal());
@@ -534,6 +493,8 @@ function wireEvents(){
       }
     });
   });
+
+  console.log('✅ All events wired successfully');
 }
 
 function updateStats(){
@@ -551,6 +512,8 @@ function updateStats(){
 }
 
 function openTaskModal(task=null){
+  console.log('🎯 Opening task modal...');
+  
   // fill projects select
   renderProjects();
 
@@ -572,18 +535,27 @@ function openTaskModal(task=null){
     els.taskPriority.value = "2";
     els.taskProject.value = "inbox";
   }
+  
+  // FIXED: Gunakan showModal() dengan benar
+  console.log('📋 Showing modal...');
   els.taskModal.showModal();
-  setTimeout(()=> els.taskTitle.focus(), 0);
+  
+  setTimeout(()=> {
+    els.taskTitle.focus();
+    console.log('🎯 Focused on task title');
+  }, 100);
 }
 
 async function onTaskSave(e){
   e.preventDefault();
+  console.log('💾 Saving task...');
+  
   const payload = {
     title: els.taskTitle.value,
-    description: els.taskDesc.value,
-    due_date: els.taskDue.value || null,
+    desc: els.taskDesc.value,
+    due: els.taskDue.value,
     priority: Number(els.taskPriority.value),
-    project_id: els.taskProject.value
+    project: els.taskProject.value
   };
   
   const id = els.taskId.value;
@@ -598,57 +570,16 @@ async function onTaskSave(e){
   try {
     if (id){
       // Update existing task
-      const response = await fetch(`/api/tasks?id=${id}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload)
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update task');
-      }
-      
-      const result = await response.json();
-      
-      // Update local data
       const t = db.tasks.find(x=>x.id===id);
       if (t){
-        Object.assign(t, {
-          title: payload.title,
-          desc: payload.description,
-          due: payload.due_date,
-          priority: payload.priority,
-          project: payload.project_id,
-          updatedAt: Date.now()
-        });
+        Object.assign(t, payload, { updatedAt: Date.now() });
+        console.log('✅ Task updated:', t.id);
       }
-      
-      console.log('✅ Task updated:', id);
     } else {
       // Create new task
-      const response = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload)
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create task');
-      }
-      
-      const result = await response.json();
-      const newTask = makeTask(payload.title, {
-        id: result.id,
-        desc: payload.description,
-        due: payload.due_date,
-        priority: payload.priority,
-        project: payload.project_id
-      });
+      const newTask = makeTask(payload.title, payload);
       db.tasks.push(newTask);
-      
-      console.log('✅ Task created:', result.id);
+      console.log('✅ Task created:', newTask.id);
     }
     
     els.taskModal.close();
@@ -682,17 +613,9 @@ async function onProjectSave(e){
   }
   
   try {
-    const response = await fetch('/api/projects', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ name })
-    });
-    
-    if (!response.ok) throw new Error('Failed to create project');
-    
-    const result = await response.json();
-    db.projects.push({ id: result.id, name, builtin: false });
-    
+    const newProject = { id: uid(), name };
+    db.projects.push(newProject);
+    save();
     renderProjects();
     els.projectModal.close();
     
@@ -708,16 +631,6 @@ async function deleteTask(taskId) {
   console.log('🗑 Deleting task:', taskId);
   
   try {
-    const response = await fetch(`/api/tasks?id=${taskId}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to delete task');
-    }
-    
     // Remove from local data
     db.tasks = db.tasks.filter(x => x.id !== taskId);
     
@@ -775,27 +688,33 @@ function debounce(func, wait) {
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-  // Check authentication on dashboard load
-  // const user = JSON.parse(localStorage.getItem('taskeru_user'));
-  // if (!user && document.querySelector('.app')) {
-  //   window.location.href = '/login.html';
-  //   return;
-  // }
+  console.log('📄 DOM loaded, initializing app...');
   
-  // // Handle logout
-  // const logoutBtn = document.querySelector('.logout-btn');
-  // if (logoutBtn) {
-  //   logoutBtn.addEventListener('click', function(e) {
-  //     e.preventDefault();
-  //     localStorage.removeItem('taskeru_user');
-  //     localStorage.removeItem('taskeru_token');
-  //     localStorage.removeItem('taskeru_prefs');
-  //     window.location.href = '/login.html';
-  //   });
-  // }
+  // Skip authentication untuk development
+  const user = JSON.parse(localStorage.getItem('taskeru_user'));
+  if (!user && document.querySelector('.app')) {
+    window.location.href = '/login.html';
+    return;
+  }
+  
+  // Handle logout
+  const logoutBtn = document.querySelector('.logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      localStorage.removeItem('taskeru_user');
+      localStorage.removeItem('taskeru_token');
+      localStorage.removeItem('taskeru_prefs');
+      localStorage.removeItem('taskeru_tasks');
+      window.location.href = '/login.html';
+    });
+  }
 
   // Only initialize if we're on the dashboard page
   if (document.querySelector('.app')) {
+    console.log('🏠 Dashboard page detected, starting init...');
     init();
+  } else {
+    console.log('❓ Not on dashboard page, skipping init');
   }
 });
