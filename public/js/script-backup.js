@@ -17,38 +17,21 @@ async function load() {
     
     if (tasksRes.ok) {
       const tasksData = await tasksRes.json();
-      // Map data dari Supabase ke format aplikasi
-      db.tasks = tasksData.map(task => ({
-        id: task.id,
-        title: task.title,
-        desc: task.description || "",
-        due: task.due_date || "",
-        priority: task.priority || 2,
-        project: task.project_id || "inbox",
-        completed: task.completed || false,
-        createdAt: task.created_at || Date.now(),
-        updatedAt: task.updated_at || Date.now()
-      }));
-      console.log('✅ Loaded tasks from server:', db.tasks.length);
+      db.tasks = tasksData;
+      console.log('✅ Loaded tasks from server:', tasksData.length);
     } else if (tasksRes.status === 401) {
       window.location.href = '/login.html';
       return;
     } else {
-      console.warn('Failed to load tasks from server');
+      console.warn('Failed to load tasks, using local data');
     }
     
     if (projectsRes.ok) {
       const serverProjects = await projectsRes.json();
-      // Gabungkan inbox default dengan projects dari server
       db.projects = [
         { id: "inbox", name: "Inbox", builtin: true },
-        ...serverProjects.filter(p => !p.builtin).map(p => ({
-          id: p.id,
-          name: p.name,
-          builtin: p.builtin || false
-        }))
+        ...serverProjects.filter(p => !p.builtin)
       ];
-      console.log('✅ Loaded projects from server:', db.projects.length);
     }
     
     // Load preferences dari localStorage
@@ -59,6 +42,13 @@ async function load() {
     
   } catch (e) {
     console.warn("Failed to load from server:", e);
+    // Fallback ke data dummy untuk testing
+    if (db.tasks.length === 0) {
+      db.tasks = [
+        makeTask("Contoh tugas pertama", { due: todayStr(), priority: 2 }),
+        makeTask("Tugas penting", { due: offsetDate(1), priority: 3, project: "inbox" })
+      ];
+    }
   }
 }
 
@@ -113,7 +103,18 @@ const els = {
   taskContainer: document.getElementById("taskContainer"),
   emptyState: document.getElementById("emptyState"),
   clearCompleted: document.getElementById("clearCompleted"),
+  bulkBar: document.getElementById("bulkBar"),
+  selectedCount: document.getElementById("selectedCount"),
+  bulkComplete: document.getElementById("bulkComplete"),
+  bulkMove: document.getElementById("bulkMove"),
+  bulkDelete: document.getElementById("bulkDelete"),
+  bulkClear: document.getElementById("bulkClear"),
+  filterHigh: document.getElementById("filterHigh"),
+  filterOverdue: document.getElementById("filterOverdue"),
   statsText: document.getElementById("statsText"),
+  exportJson: document.getElementById("exportJson"),
+  importJson: document.getElementById("importJson"),
+  importFile: document.getElementById("importFile"),
   // tabs
   tabs: Array.from(document.querySelectorAll(".tab")),
   // modal: task
@@ -134,6 +135,11 @@ const els = {
   projectName: document.getElementById("projectName"),
   projectCancel: document.getElementById("projectCancel"),
   projectSave: document.getElementById("projectSave"),
+  // modal: move
+  moveModal: document.getElementById("moveModal"),
+  moveProjectSelect: document.getElementById("moveProjectSelect"),
+  moveCancel: document.getElementById("moveCancel"),
+  moveSave: document.getElementById("moveSave"),
   // template
   taskItemTemplate: document.getElementById("taskItemTemplate")
 };
@@ -153,11 +159,11 @@ function getAuthHeaders() {
 }
 
 function checkAuth() {
-    // const user = getCurrentUser();
-    // if (!user) {
-    //     window.location.href = '/login.html';
-    //     return false;
-    // }
+    const user = getCurrentUser();
+    if (!user) {
+        window.location.href = '/login.html';
+        return false;
+    }
     return true;
 }
 
@@ -168,7 +174,8 @@ let state = {
   sort: "created_desc",
   group: "none",
   filterHigh: false,
-  filterOverdue: false
+  filterOverdue: false,
+  selection: new Set() // selected task ids (bulk)
 };
 
 /* ========= Init ========= */
@@ -204,6 +211,15 @@ function renderProjects() {
     opt.value = p.id;
     opt.textContent = p.name + (p.builtin ? " (default)" : "");
     els.taskProject.appendChild(opt);
+  });
+  
+  // fill move project select
+  els.moveProjectSelect.innerHTML = "";
+  db.projects.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.name;
+    els.moveProjectSelect.appendChild(opt);
   });
   
   // sidebar list
@@ -334,6 +350,8 @@ function renderAll() {
     els.taskContainer.appendChild(group);
   });
 
+  // update bulk bar
+  updateBulkBar();
   updateStats();
 }
 
@@ -373,6 +391,7 @@ function renderTask(t){
   const root = tpl;
   if (t.completed) root.classList.add("completed");
 
+  const sel = root.querySelector(".selectBox");
   const cb  = root.querySelector(".checkBox");
   const title = root.querySelector(".title");
   const badge = root.querySelector(".badge.priority");
@@ -381,6 +400,14 @@ function renderTask(t){
   const editBtn = root.querySelector(".editBtn");
   const delBtn = root.querySelector(".delBtn");
 
+  // selection
+  sel.checked = state.selection.has(t.id);
+  sel.addEventListener("change", ()=>{
+    if (sel.checked) state.selection.add(t.id); 
+    else state.selection.delete(t.id);
+    updateBulkBar();
+  });
+
   // complete checkbox
   cb.checked = t.completed;
   cb.addEventListener("change", async ()=>{
@@ -388,7 +415,6 @@ function renderTask(t){
     t.updatedAt = Date.now();
     
     try {
-      // Update di server
       const response = await fetch(`/api/tasks?id=${t.id}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
@@ -477,6 +503,12 @@ function wireEvents(){
       e.preventDefault(); 
       els.searchInput.focus(); 
     }
+    if (e.key==="Escape"){
+      if (state.selection.size > 0) {
+        state.selection.clear();
+        updateBulkBar();
+      }
+    }
   });
 
   // task modal
@@ -488,12 +520,49 @@ function wireEvents(){
   els.projectCancel.addEventListener("click", ()=> els.projectModal.close());
   els.projectForm.addEventListener("submit", onProjectSave);
 
+  // move modal
+  els.moveCancel.addEventListener("click", ()=> els.moveModal.close());
+  els.moveForm.addEventListener("submit", onBulkMoveSave);
+
   // clear completed
   els.clearCompleted.addEventListener("click", ()=>{
     const before = db.tasks.length;
     db.tasks = db.tasks.filter(t=>!t.completed);
+    state.selection.clear();
     if (db.tasks.length !== before) save();
     renderAll();
+  });
+
+  // bulk actions
+  els.bulkComplete.addEventListener("click", ()=>{
+    db.tasks.forEach(t=>{ 
+      if (state.selection.has(t.id)) {
+        t.completed = true;
+        t.updatedAt = Date.now();
+      }
+    });
+    save(); 
+    renderAll();
+  });
+  
+  els.bulkMove.addEventListener("click", openBulkMoveModal);
+  
+  els.bulkDelete.addEventListener("click", ()=>{
+    if (!confirm(`Hapus ${state.selection.size} tugas terpilih?`)) return;
+    
+    // Convert Set to Array for safe iteration
+    const selectedIds = Array.from(state.selection);
+    selectedIds.forEach(taskId => {
+      deleteTask(taskId, false); // false = jangan renderAll setiap kali
+    });
+    
+    state.selection.clear();
+    renderAll(); // Render sekali saja setelah semua delete selesai
+  });
+  
+  els.bulkClear.addEventListener("click", ()=>{ 
+    state.selection.clear(); 
+    updateBulkBar(); 
   });
 
   // theme
@@ -507,6 +576,53 @@ function wireEvents(){
   // sidebar mobile
   els.sidebarToggle.addEventListener("click", ()=>{
     els.sidebar.classList.toggle("open");
+  });
+
+  // export/import
+  els.exportJson.addEventListener("click", ()=>{
+    const data = {
+      tasks: db.tasks,
+      projects: db.projects.filter(p => !p.builtin),
+      exportDate: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; 
+    a.download = `taskeru-backup-${todayStr()}.json`; 
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  
+  els.importJson.addEventListener("click", ()=> els.importFile.click());
+  els.importFile.addEventListener("change", async (e)=>{
+    const file = e.target.files[0]; 
+    if (!file) return;
+    
+    if (!confirm("Import data akan mengganti data yang ada. Lanjut?")) {
+      e.target.value = "";
+      return;
+    }
+    
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.tasks || !data.projects) throw new Error("Invalid file format");
+      
+      Object.assign(db, data);
+      // Ensure inbox project exists
+      if (!db.projects.find(p => p.id === "inbox")) {
+        db.projects.unshift({ id: "inbox", name: "Inbox", builtin: true });
+      }
+      
+      save(); 
+      renderProjects(); 
+      renderAll();
+      alert(`Berhasil import ${data.tasks.length} tasks dan ${data.projects.length} projects`);
+    } catch (err) {
+      alert("Gagal import: " + err.message);
+    }
+    e.target.value = "";
   });
 
   // sidebar close
@@ -550,6 +666,12 @@ function updateStats(){
   els.statsText.textContent = stats;
 }
 
+function updateBulkBar(){
+  const n = state.selection.size;
+  els.selectedCount.textContent = `${n} selected`;
+  els.bulkBar.hidden = n===0;
+}
+
 function openTaskModal(task=null){
   // fill projects select
   renderProjects();
@@ -567,8 +689,10 @@ function openTaskModal(task=null){
     els.taskId.value = "";
     els.taskTitle.value = "";
     els.taskDesc.value = "";
-    // Set default due date kosong
-    els.taskDue.value = "";
+    // Set default due date to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    els.taskDue.value = tomorrow.toISOString().split('T')[0];
     els.taskPriority.value = "2";
     els.taskProject.value = "inbox";
   }
@@ -580,10 +704,10 @@ async function onTaskSave(e){
   e.preventDefault();
   const payload = {
     title: els.taskTitle.value,
-    description: els.taskDesc.value,
-    due_date: els.taskDue.value || null,
+    desc: els.taskDesc.value,
+    due: els.taskDue.value,
     priority: Number(els.taskPriority.value),
-    project_id: els.taskProject.value
+    project: els.taskProject.value
   };
   
   const id = els.taskId.value;
@@ -614,17 +738,10 @@ async function onTaskSave(e){
       // Update local data
       const t = db.tasks.find(x=>x.id===id);
       if (t){
-        Object.assign(t, {
-          title: payload.title,
-          desc: payload.description,
-          due: payload.due_date,
-          priority: payload.priority,
-          project: payload.project_id,
-          updatedAt: Date.now()
-        });
+        Object.assign(t, result.task);
       }
       
-      console.log('✅ Task updated:', id);
+      console.log('✅ Task updated:', result.task.id);
     } else {
       // Create new task
       const response = await fetch('/api/tasks', {
@@ -639,16 +756,10 @@ async function onTaskSave(e){
       }
       
       const result = await response.json();
-      const newTask = makeTask(payload.title, {
-        id: result.id,
-        desc: payload.description,
-        due: payload.due_date,
-        priority: payload.priority,
-        project: payload.project_id
-      });
+      const newTask = makeTask(payload.title, result.task);
       db.tasks.push(newTask);
       
-      console.log('✅ Task created:', result.id);
+      console.log('✅ Task created:', result.task.id);
     }
     
     els.taskModal.close();
@@ -658,6 +769,20 @@ async function onTaskSave(e){
   } catch (error) {
     console.error('❌ Error saving task:', error);
     alert('Gagal menyimpan task: ' + error.message);
+    
+    // Fallback ke localStorage untuk testing
+    if (id){
+      const t = db.tasks.find(x=>x.id===id);
+      if (t){
+        Object.assign(t, payload, { updatedAt: Date.now() });
+      }
+    } else {
+      const newTask = makeTask(payload.title, payload);
+      db.tasks.push(newTask);
+    }
+    await save();
+    renderAll();
+    els.taskModal.close();
   }
 }
 
@@ -691,18 +816,90 @@ async function onProjectSave(e){
     if (!response.ok) throw new Error('Failed to create project');
     
     const result = await response.json();
-    db.projects.push({ id: result.id, name, builtin: false });
+    db.projects.push({ id: result.id, name });
     
     renderProjects();
     els.projectModal.close();
     
   } catch (error) {
     console.error('Error creating project:', error);
-    alert('Gagal membuat project: ' + error.message);
+    // Fallback to local storage
+    const newProject = { id: uid(), name };
+    db.projects.push(newProject);
+    save();
+    renderProjects();
+    els.projectModal.close();
   }
 }
 
-async function deleteTask(taskId) {
+function openBulkMoveModal() {
+  // Fill project select for bulk move
+  renderProjects();
+  els.moveModal.showModal();
+}
+
+async function onBulkMoveSave(e) {
+  e.preventDefault();
+  const projectId = els.moveProjectSelect.value;
+  
+  if (!projectId) {
+    alert("Pilih project terlebih dahulu!");
+    return;
+  }
+
+  console.log('🚚 Bulk moving tasks to project:', projectId);
+
+  try {
+    const updatePromises = [];
+    const selectedTasks = db.tasks.filter(t => state.selection.has(t.id));
+    
+    // Update di server
+    selectedTasks.forEach(t => {
+      updatePromises.push(
+        fetch(`/api/tasks?id=${t.id}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ project: projectId })
+        }).catch(err => {
+          console.error(`Failed to update task ${t.id}:`, err);
+        })
+      );
+    });
+
+    await Promise.all(updatePromises);
+    
+    // Update local data
+    db.tasks.forEach(t => {
+      if (state.selection.has(t.id)) {
+        t.project = projectId;
+        t.updatedAt = Date.now();
+      }
+    });
+    
+    await save();
+    els.moveModal.close();
+    renderAll();
+    
+    console.log('✅ Bulk move completed');
+    
+  } catch (error) {
+    console.error('❌ Error moving tasks:', error);
+    alert('Gagal memindahkan tasks: ' + error.message);
+    
+    // Fallback ke localStorage
+    db.tasks.forEach(t => {
+      if (state.selection.has(t.id)) {
+        t.project = projectId;
+        t.updatedAt = Date.now();
+      }
+    });
+    await save();
+    els.moveModal.close();
+    renderAll();
+  }
+}
+
+async function deleteTask(taskId, shouldRender = true) {
   if (!confirm("Hapus tugas ini?")) return;
   
   console.log('🗑 Deleting task:', taskId);
@@ -720,15 +917,27 @@ async function deleteTask(taskId) {
     
     // Remove from local data
     db.tasks = db.tasks.filter(x => x.id !== taskId);
+    state.selection.delete(taskId);
     
     console.log('✅ Task deleted:', taskId);
     
-    await save();
-    renderAll();
+    if (shouldRender) {
+      await save();
+      renderAll();
+    }
     
   } catch (error) {
     console.error('❌ Error deleting task:', error);
     alert('Gagal menghapus task: ' + error.message);
+    
+    // Fallback ke localStorage
+    db.tasks = db.tasks.filter(x => x.id !== taskId);
+    state.selection.delete(taskId);
+    
+    if (shouldRender) {
+      await save();
+      renderAll();
+    }
   }
 }
 
@@ -776,23 +985,23 @@ function debounce(func, wait) {
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
   // Check authentication on dashboard load
-  // const user = JSON.parse(localStorage.getItem('taskeru_user'));
-  // if (!user && document.querySelector('.app')) {
-  //   window.location.href = '/login.html';
-  //   return;
-  // }
+  const user = JSON.parse(localStorage.getItem('taskeru_user'));
+  if (!user && document.querySelector('.app')) {
+    window.location.href = '/login.html';
+    return;
+  }
   
-  // // Handle logout
-  // const logoutBtn = document.querySelector('.logout-btn');
-  // if (logoutBtn) {
-  //   logoutBtn.addEventListener('click', function(e) {
-  //     e.preventDefault();
-  //     localStorage.removeItem('taskeru_user');
-  //     localStorage.removeItem('taskeru_token');
-  //     localStorage.removeItem('taskeru_prefs');
-  //     window.location.href = '/login.html';
-  //   });
-  // }
+  // Handle logout
+  const logoutBtn = document.querySelector('.logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      localStorage.removeItem('taskeru_user');
+      localStorage.removeItem('taskeru_token');
+      localStorage.removeItem('taskeru_prefs');
+      window.location.href = '/login.html';
+    });
+  }
 
   // Only initialize if we're on the dashboard page
   if (document.querySelector('.app')) {
