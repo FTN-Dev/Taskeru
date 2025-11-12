@@ -10,32 +10,56 @@ async function load() {
   if (!checkAuth()) return;
   
   try {
+    const [tasksRes, projectsRes] = await Promise.all([
+      fetch('/api/tasks', { headers: getAuthHeaders() }),
+      fetch('/api/projects', { headers: getAuthHeaders() })
+    ]);
+    
+    if (tasksRes.ok) {
+      const tasksData = await tasksRes.json();
+      db.tasks = tasksData;
+      console.log('✅ Loaded tasks from server:', tasksData.length);
+    } else if (tasksRes.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    } else {
+      console.warn('Failed to load tasks, using local data');
+    }
+    
+    if (projectsRes.ok) {
+      const serverProjects = await projectsRes.json();
+      db.projects = [
+        { id: "inbox", name: "Inbox", builtin: true },
+        ...serverProjects.filter(p => !p.builtin)
+      ];
+    }
+    
     // Load preferences dari localStorage
     const prefs = localStorage.getItem('taskeru_prefs');
     if (prefs) {
       db.prefs = { ...db.prefs, ...JSON.parse(prefs) };
     }
     
-    // Load tasks dari localStorage sebagai fallback
-    const savedTasks = localStorage.getItem('taskeru_tasks');
-    if (savedTasks) {
-      db.tasks = JSON.parse(savedTasks);
-    }
-    
   } catch (e) {
     console.warn("Failed to load from server:", e);
+    // Fallback ke data dummy untuk testing
+    if (db.tasks.length === 0) {
+      db.tasks = [
+        makeTask("Contoh tugas pertama", { due: todayStr(), priority: 2 }),
+        makeTask("Tugas penting", { due: offsetDate(1), priority: 3, project: "inbox" })
+      ];
+    }
   }
 }
 
 // Save data ke server
 async function save() {
   try {
-    // Simpan preferences dan tasks ke localStorage
+    // Simpan preferences ke localStorage
     localStorage.setItem('taskeru_prefs', JSON.stringify(db.prefs));
-    localStorage.setItem('taskeru_tasks', JSON.stringify(db.tasks));
-    console.log('💾 Saved data to localStorage');
+    console.log('💾 Saved preferences to localStorage');
   } catch (e) {
-    console.warn("Failed to save data:", e);
+    console.warn("Failed to save preferences:", e);
   }
 }
 
@@ -79,7 +103,18 @@ const els = {
   taskContainer: document.getElementById("taskContainer"),
   emptyState: document.getElementById("emptyState"),
   clearCompleted: document.getElementById("clearCompleted"),
+  bulkBar: document.getElementById("bulkBar"),
+  selectedCount: document.getElementById("selectedCount"),
+  bulkComplete: document.getElementById("bulkComplete"),
+  bulkMove: document.getElementById("bulkMove"),
+  bulkDelete: document.getElementById("bulkDelete"),
+  bulkClear: document.getElementById("bulkClear"),
+  filterHigh: document.getElementById("filterHigh"),
+  filterOverdue: document.getElementById("filterOverdue"),
   statsText: document.getElementById("statsText"),
+  exportJson: document.getElementById("exportJson"),
+  importJson: document.getElementById("importJson"),
+  importFile: document.getElementById("importFile"),
   // tabs
   tabs: Array.from(document.querySelectorAll(".tab")),
   // modal: task
@@ -100,6 +135,11 @@ const els = {
   projectName: document.getElementById("projectName"),
   projectCancel: document.getElementById("projectCancel"),
   projectSave: document.getElementById("projectSave"),
+  // modal: move
+  moveModal: document.getElementById("moveModal"),
+  moveProjectSelect: document.getElementById("moveProjectSelect"),
+  moveCancel: document.getElementById("moveCancel"),
+  moveSave: document.getElementById("moveSave"),
   // template
   taskItemTemplate: document.getElementById("taskItemTemplate")
 };
@@ -110,7 +150,20 @@ function getCurrentUser() {
     return user ? JSON.parse(user) : null;
 }
 
+function getAuthHeaders() {
+    const user = getCurrentUser();
+    return {
+        'Content-Type': 'application/json',
+        'X-User-Id': user?.id || ''
+    };
+}
+
 function checkAuth() {
+    const user = getCurrentUser();
+    if (!user) {
+        window.location.href = '/login.html';
+        return false;
+    }
     return true;
 }
 
@@ -121,12 +174,14 @@ let state = {
   sort: "created_desc",
   group: "none",
   filterHigh: false,
-  filterOverdue: false
+  filterOverdue: false,
+  selection: new Set() // selected task ids (bulk)
 };
 
 /* ========= Init ========= */
 function init() {
   console.log('🚀 Initializing Taskeru...');
+  console.log('👤 Current user:', getCurrentUser());
   
   load().then(() => {
     applyTheme(db.prefs.theme || "dark");
@@ -156,6 +211,15 @@ function renderProjects() {
     opt.value = p.id;
     opt.textContent = p.name + (p.builtin ? " (default)" : "");
     els.taskProject.appendChild(opt);
+  });
+  
+  // fill move project select
+  els.moveProjectSelect.innerHTML = "";
+  db.projects.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.name;
+    els.moveProjectSelect.appendChild(opt);
   });
   
   // sidebar list
@@ -258,7 +322,7 @@ function renderAll() {
   els.emptyState.hidden = hasAny;
   els.taskContainer.hidden = !hasAny;
 
-  if (Object.keys(groups).length === 0 && hasAny) {
+  if (Object.keys(groups).length === 0) {
     // If no groups, create a default one
     groups["Tasks"] = items;
   }
@@ -286,6 +350,8 @@ function renderAll() {
     els.taskContainer.appendChild(group);
   });
 
+  // update bulk bar
+  updateBulkBar();
   updateStats();
 }
 
@@ -325,6 +391,7 @@ function renderTask(t){
   const root = tpl;
   if (t.completed) root.classList.add("completed");
 
+  const sel = root.querySelector(".selectBox");
   const cb  = root.querySelector(".checkBox");
   const title = root.querySelector(".title");
   const badge = root.querySelector(".badge.priority");
@@ -333,6 +400,14 @@ function renderTask(t){
   const editBtn = root.querySelector(".editBtn");
   const delBtn = root.querySelector(".delBtn");
 
+  // selection
+  sel.checked = state.selection.has(t.id);
+  sel.addEventListener("change", ()=>{
+    if (sel.checked) state.selection.add(t.id); 
+    else state.selection.delete(t.id);
+    updateBulkBar();
+  });
+
   // complete checkbox
   cb.checked = t.completed;
   cb.addEventListener("change", async ()=>{
@@ -340,6 +415,14 @@ function renderTask(t){
     t.updatedAt = Date.now();
     
     try {
+      const response = await fetch(`/api/tasks?id=${t.id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ completed: t.completed })
+      });
+      
+      if (!response.ok) throw new Error('Failed to update task');
+      
       await save();
       renderAll();
     } catch (error) {
@@ -369,8 +452,6 @@ function renderTask(t){
 
 /* ========= Events & Modals ========= */
 function wireEvents(){
-  console.log('🔌 Wiring events...');
-  
   // tabs
   els.tabs.forEach(b=>{
     b.addEventListener("click", ()=>{
@@ -407,16 +488,9 @@ function wireEvents(){
     renderAll(); 
   });
 
-  // add task - FIXED: Pastikan event listener terpasang
-  els.addTaskBtn.addEventListener("click", ()=> {
-    console.log('➕ Add task button clicked');
-    openTaskModal();
-  });
-  
-  els.ctaAddTask.addEventListener("click", ()=> {
-    console.log('➕ CTA Add task button clicked');
-    openTaskModal();
-  });
+  // add task
+  els.addTaskBtn.addEventListener("click", ()=> openTaskModal());
+  els.ctaAddTask.addEventListener("click", ()=> openTaskModal());
 
   // keyboard shortcuts
   window.addEventListener("keydown", (e)=>{
@@ -429,30 +503,66 @@ function wireEvents(){
       e.preventDefault(); 
       els.searchInput.focus(); 
     }
+    if (e.key==="Escape"){
+      if (state.selection.size > 0) {
+        state.selection.clear();
+        updateBulkBar();
+      }
+    }
   });
 
-  // task modal - FIXED: Pastikan form submit handler terpasang
-  els.taskCancel.addEventListener("click", ()=> {
-    console.log('❌ Task modal canceled');
-    els.taskModal.close();
-  });
-  
-  els.taskForm.addEventListener("submit", (e) => {
-    console.log('💾 Task form submitted');
-    onTaskSave(e);
-  });
+  // task modal
+  els.taskCancel.addEventListener("click", ()=> els.taskModal.close());
+  els.taskForm.addEventListener("submit", onTaskSave);
 
   // project modal
   els.addProjectBtn.addEventListener("click", ()=> openProjectModal());
   els.projectCancel.addEventListener("click", ()=> els.projectModal.close());
   els.projectForm.addEventListener("submit", onProjectSave);
 
+  // move modal
+  els.moveCancel.addEventListener("click", ()=> els.moveModal.close());
+  els.moveForm.addEventListener("submit", onBulkMoveSave);
+
   // clear completed
   els.clearCompleted.addEventListener("click", ()=>{
     const before = db.tasks.length;
     db.tasks = db.tasks.filter(t=>!t.completed);
+    state.selection.clear();
     if (db.tasks.length !== before) save();
     renderAll();
+  });
+
+  // bulk actions
+  els.bulkComplete.addEventListener("click", ()=>{
+    db.tasks.forEach(t=>{ 
+      if (state.selection.has(t.id)) {
+        t.completed = true;
+        t.updatedAt = Date.now();
+      }
+    });
+    save(); 
+    renderAll();
+  });
+  
+  els.bulkMove.addEventListener("click", openBulkMoveModal);
+  
+  els.bulkDelete.addEventListener("click", ()=>{
+    if (!confirm(`Hapus ${state.selection.size} tugas terpilih?`)) return;
+    
+    // Convert Set to Array for safe iteration
+    const selectedIds = Array.from(state.selection);
+    selectedIds.forEach(taskId => {
+      deleteTask(taskId, false); // false = jangan renderAll setiap kali
+    });
+    
+    state.selection.clear();
+    renderAll(); // Render sekali saja setelah semua delete selesai
+  });
+  
+  els.bulkClear.addEventListener("click", ()=>{ 
+    state.selection.clear(); 
+    updateBulkBar(); 
   });
 
   // theme
@@ -466,6 +576,53 @@ function wireEvents(){
   // sidebar mobile
   els.sidebarToggle.addEventListener("click", ()=>{
     els.sidebar.classList.toggle("open");
+  });
+
+  // export/import
+  els.exportJson.addEventListener("click", ()=>{
+    const data = {
+      tasks: db.tasks,
+      projects: db.projects.filter(p => !p.builtin),
+      exportDate: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; 
+    a.download = `taskeru-backup-${todayStr()}.json`; 
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  
+  els.importJson.addEventListener("click", ()=> els.importFile.click());
+  els.importFile.addEventListener("change", async (e)=>{
+    const file = e.target.files[0]; 
+    if (!file) return;
+    
+    if (!confirm("Import data akan mengganti data yang ada. Lanjut?")) {
+      e.target.value = "";
+      return;
+    }
+    
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.tasks || !data.projects) throw new Error("Invalid file format");
+      
+      Object.assign(db, data);
+      // Ensure inbox project exists
+      if (!db.projects.find(p => p.id === "inbox")) {
+        db.projects.unshift({ id: "inbox", name: "Inbox", builtin: true });
+      }
+      
+      save(); 
+      renderProjects(); 
+      renderAll();
+      alert(`Berhasil import ${data.tasks.length} tasks dan ${data.projects.length} projects`);
+    } catch (err) {
+      alert("Gagal import: " + err.message);
+    }
+    e.target.value = "";
   });
 
   // sidebar close
@@ -493,8 +650,6 @@ function wireEvents(){
       }
     });
   });
-
-  console.log('✅ All events wired successfully');
 }
 
 function updateStats(){
@@ -511,9 +666,13 @@ function updateStats(){
   els.statsText.textContent = stats;
 }
 
+function updateBulkBar(){
+  const n = state.selection.size;
+  els.selectedCount.textContent = `${n} selected`;
+  els.bulkBar.hidden = n===0;
+}
+
 function openTaskModal(task=null){
-  console.log('🎯 Opening task modal...');
-  
   // fill projects select
   renderProjects();
 
@@ -530,26 +689,19 @@ function openTaskModal(task=null){
     els.taskId.value = "";
     els.taskTitle.value = "";
     els.taskDesc.value = "";
-    // Set default due date kosong
-    els.taskDue.value = "";
+    // Set default due date to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    els.taskDue.value = tomorrow.toISOString().split('T')[0];
     els.taskPriority.value = "2";
     els.taskProject.value = "inbox";
   }
-  
-  // FIXED: Gunakan showModal() dengan benar
-  console.log('📋 Showing modal...');
   els.taskModal.showModal();
-  
-  setTimeout(()=> {
-    els.taskTitle.focus();
-    console.log('🎯 Focused on task title');
-  }, 100);
+  setTimeout(()=> els.taskTitle.focus(), 0);
 }
 
 async function onTaskSave(e){
   e.preventDefault();
-  console.log('💾 Saving task...');
-  
   const payload = {
     title: els.taskTitle.value,
     desc: els.taskDesc.value,
@@ -570,16 +722,44 @@ async function onTaskSave(e){
   try {
     if (id){
       // Update existing task
+      const response = await fetch(`/api/tasks?id=${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update task');
+      }
+      
+      const result = await response.json();
+      
+      // Update local data
       const t = db.tasks.find(x=>x.id===id);
       if (t){
-        Object.assign(t, payload, { updatedAt: Date.now() });
-        console.log('✅ Task updated:', t.id);
+        Object.assign(t, result.task);
       }
+      
+      console.log('✅ Task updated:', result.task.id);
     } else {
       // Create new task
-      const newTask = makeTask(payload.title, payload);
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create task');
+      }
+      
+      const result = await response.json();
+      const newTask = makeTask(payload.title, result.task);
       db.tasks.push(newTask);
-      console.log('✅ Task created:', newTask.id);
+      
+      console.log('✅ Task created:', result.task.id);
     }
     
     els.taskModal.close();
@@ -589,6 +769,20 @@ async function onTaskSave(e){
   } catch (error) {
     console.error('❌ Error saving task:', error);
     alert('Gagal menyimpan task: ' + error.message);
+    
+    // Fallback ke localStorage untuk testing
+    if (id){
+      const t = db.tasks.find(x=>x.id===id);
+      if (t){
+        Object.assign(t, payload, { updatedAt: Date.now() });
+      }
+    } else {
+      const newTask = makeTask(payload.title, payload);
+      db.tasks.push(newTask);
+    }
+    await save();
+    renderAll();
+    els.taskModal.close();
   }
 }
 
@@ -613,35 +807,137 @@ async function onProjectSave(e){
   }
   
   try {
-    const newProject = { id: uid(), name };
-    db.projects.push(newProject);
-    save();
+    const response = await fetch('/api/projects', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name })
+    });
+    
+    if (!response.ok) throw new Error('Failed to create project');
+    
+    const result = await response.json();
+    db.projects.push({ id: result.id, name });
+    
     renderProjects();
     els.projectModal.close();
     
   } catch (error) {
     console.error('Error creating project:', error);
-    alert('Gagal membuat project: ' + error.message);
+    // Fallback to local storage
+    const newProject = { id: uid(), name };
+    db.projects.push(newProject);
+    save();
+    renderProjects();
+    els.projectModal.close();
   }
 }
 
-async function deleteTask(taskId) {
+function openBulkMoveModal() {
+  // Fill project select for bulk move
+  renderProjects();
+  els.moveModal.showModal();
+}
+
+async function onBulkMoveSave(e) {
+  e.preventDefault();
+  const projectId = els.moveProjectSelect.value;
+  
+  if (!projectId) {
+    alert("Pilih project terlebih dahulu!");
+    return;
+  }
+
+  console.log('🚚 Bulk moving tasks to project:', projectId);
+
+  try {
+    const updatePromises = [];
+    const selectedTasks = db.tasks.filter(t => state.selection.has(t.id));
+    
+    // Update di server
+    selectedTasks.forEach(t => {
+      updatePromises.push(
+        fetch(`/api/tasks?id=${t.id}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ project: projectId })
+        }).catch(err => {
+          console.error(`Failed to update task ${t.id}:`, err);
+        })
+      );
+    });
+
+    await Promise.all(updatePromises);
+    
+    // Update local data
+    db.tasks.forEach(t => {
+      if (state.selection.has(t.id)) {
+        t.project = projectId;
+        t.updatedAt = Date.now();
+      }
+    });
+    
+    await save();
+    els.moveModal.close();
+    renderAll();
+    
+    console.log('✅ Bulk move completed');
+    
+  } catch (error) {
+    console.error('❌ Error moving tasks:', error);
+    alert('Gagal memindahkan tasks: ' + error.message);
+    
+    // Fallback ke localStorage
+    db.tasks.forEach(t => {
+      if (state.selection.has(t.id)) {
+        t.project = projectId;
+        t.updatedAt = Date.now();
+      }
+    });
+    await save();
+    els.moveModal.close();
+    renderAll();
+  }
+}
+
+async function deleteTask(taskId, shouldRender = true) {
   if (!confirm("Hapus tugas ini?")) return;
   
   console.log('🗑 Deleting task:', taskId);
   
   try {
+    const response = await fetch(`/api/tasks?id=${taskId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to delete task');
+    }
+    
     // Remove from local data
     db.tasks = db.tasks.filter(x => x.id !== taskId);
+    state.selection.delete(taskId);
     
     console.log('✅ Task deleted:', taskId);
     
-    await save();
-    renderAll();
+    if (shouldRender) {
+      await save();
+      renderAll();
+    }
     
   } catch (error) {
     console.error('❌ Error deleting task:', error);
     alert('Gagal menghapus task: ' + error.message);
+    
+    // Fallback ke localStorage
+    db.tasks = db.tasks.filter(x => x.id !== taskId);
+    state.selection.delete(taskId);
+    
+    if (shouldRender) {
+      await save();
+      renderAll();
+    }
   }
 }
 
@@ -688,9 +984,7 @@ function debounce(func, wait) {
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('📄 DOM loaded, initializing app...');
-  
-  // Skip authentication untuk development
+  // Check authentication on dashboard load
   const user = JSON.parse(localStorage.getItem('taskeru_user'));
   if (!user && document.querySelector('.app')) {
     window.location.href = '/login.html';
@@ -705,16 +999,12 @@ document.addEventListener('DOMContentLoaded', function() {
       localStorage.removeItem('taskeru_user');
       localStorage.removeItem('taskeru_token');
       localStorage.removeItem('taskeru_prefs');
-      localStorage.removeItem('taskeru_tasks');
       window.location.href = '/login.html';
     });
   }
 
   // Only initialize if we're on the dashboard page
   if (document.querySelector('.app')) {
-    console.log('🏠 Dashboard page detected, starting init...');
     init();
-  } else {
-    console.log('❓ Not on dashboard page, skipping init');
   }
 });
