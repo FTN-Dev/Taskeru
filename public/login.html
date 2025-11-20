@@ -1,136 +1,153 @@
 <!DOCTYPE html>
 <html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Taskeru - Login</title>
-  <link rel="stylesheet" href="css/style.css">
-</head>
-<body class="auth-page">
-  <div class="auth-wrapper">
-    <!-- Bagian Kiri: Branding & Features -->
-    <div class="auth-brand-section">
-      <div class="auth-header">
-        <div class="auth-logo">
-          <div class="logo">✓</div>
-          <h1>Taskeru</h1>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Taskeru - Login</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body class="auth-page">
+    <div class="auth-wrapper">
+      <!-- Bagian Kiri: Branding & Features -->
+      <div class="auth-brand-section">
+        <div class="auth-header">
+          <div class="auth-logo">
+            <div class="logo">✓</div>
+            <h1>Taskeru</h1>
+          </div>
+          <p class="auth-subtitle">Stay organized and productive</p>
         </div>
-        <p class="auth-subtitle">Stay organized and productive</p>
+
+        <div class="auth-features">
+          <div class="feature">
+            <span class="feature-icon">📝</span>
+            <span class="feature-text">Kelola tugas dengan mudah</span>
+          </div>
+          <div class="feature">
+            <span class="feature-icon">📅</span>
+            <span class="feature-text">Atur jadwal dan deadline</span>
+          </div>
+          <div class="feature">
+            <span class="feature-icon">✅</span>
+            <span class="feature-text">Pantau progress pekerjaan</span>
+          </div>
+        </div>
       </div>
 
-      <div class="auth-features">
-        <div class="feature">
-          <span class="feature-icon">📝</span>
-          <span class="feature-text">Kelola tugas dengan mudah</span>
-        </div>
-        <div class="feature">
-          <span class="feature-icon">📅</span>
-          <span class="feature-text">Atur jadwal dan deadline</span>
-        </div>
-        <div class="feature">
-          <span class="feature-icon">✅</span>
-          <span class="feature-text">Pantau progress pekerjaan</span>
+      <!-- Bagian Kanan: Form Login -->
+      <div class="auth-form-section">
+        <div class="auth-container">
+          <h2>Login ke Taskeru</h2>
+          <p class="subtitle">Masuk ke akun Anda</p>
+
+          <div id="login-message" class="message"></div>
+
+          <form id="loginForm" class="auth-form">
+            <div class="form-group">
+              <input
+                type="text"
+                name="username"
+                placeholder="Username"
+                required
+                class="form-input"
+                id="username"
+              />
+            </div>
+            <div class="form-group">
+              <input
+                type="password"
+                name="password"
+                placeholder="Password"
+                required
+                class="form-input"
+                id="password"
+              />
+            </div>
+            <button type="submit" class="auth-btn primary-btn">Login</button>
+          </form>
+
+          <div class="auth-footer">
+            <p>
+              Belum punya akun?
+              <a href="register.html" class="auth-link">Daftar di sini</a>
+            </p>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Bagian Kanan: Form Login -->
-    <div class="auth-form-section">
-      <div class="auth-container">
-        <h2>Login ke Taskeru</h2>
-        <p class="subtitle">Masuk ke akun Anda</p>
-        
-        <div id="login-message" class="message"></div>
-        
-        <form id="loginForm" class="auth-form">
-          <div class="form-group">
-            <input type="text" name="username" placeholder="Username" required class="form-input" id="username">
-          </div>
-          <div class="form-group">
-            <input type="password" name="password" placeholder="Password" required class="form-input" id="password">
-          </div>
-          <button type="submit" class="auth-btn primary-btn">Login</button>
-        </form>
-        
-        <div class="auth-footer">
-          <p>Belum punya akun? <a href="register.html" class="auth-link">Daftar di sini</a></p>
-        </div>
-      </div>
-    </div>
-  </div>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const messageEl = document.getElementById("login-message");
+        const loginForm = document.getElementById("loginForm");
 
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const messageEl = document.getElementById('login-message');
-      const loginForm = document.getElementById('loginForm');
+        // Handle URL parameters untuk error/success messages
+        const urlParams = new URLSearchParams(window.location.search);
+        const error = urlParams.get("error");
+        const success = urlParams.get("success");
 
-      // Handle URL parameters untuk error/success messages
-      const urlParams = new URLSearchParams(window.location.search);
-      const error = urlParams.get('error');
-      const success = urlParams.get('success');
-      
-      if (error) {
-        showMessage(decodeURIComponent(error), 'error');
-      }
-      
-      if (success) {
-        showMessage(decodeURIComponent(success), 'success');
-      }
-
-      // Handle form submission
-      loginForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        
-        if (!username || !password) {
-          showMessage('Username dan password harus diisi', 'error');
-          return;
+        if (error) {
+          showMessage(decodeURIComponent(error), "error");
         }
 
-        try {
-          const response = await fetch('/api/login', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ username, password })
-          });
+        if (success) {
+          showMessage(decodeURIComponent(success), "success");
+        }
 
-          const result = await response.json();
+        // Handle form submission
+        loginForm.addEventListener("submit", async function (e) {
+          e.preventDefault();
 
-          if (response.ok && result.success) {
-            // Simpan user data di localStorage
-            localStorage.setItem('taskeru_user', JSON.stringify(result.user));
-            localStorage.setItem('taskeru_token', result.sessionToken);
-            
-            showMessage('Login berhasil! Mengalihkan...', 'success');
-            setTimeout(() => {
-              window.location.href = 'dashboard.html';
-            }, 1000);
-          } else {
-            showMessage(result.error || 'Login gagal', 'error');
+          const username = document.getElementById("username").value;
+          const password = document.getElementById("password").value;
+
+          if (!username || !password) {
+            showMessage("Username dan password harus diisi", "error");
+            return;
           }
-        } catch (error) {
-          console.error('Login error:', error);
-          showMessage('Terjadi kesalahan saat login', 'error');
+
+          try {
+            const response = await fetch("/api/login", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ username, password }),
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+              // Simpan user data di localStorage
+              localStorage.setItem("taskeru_user", JSON.stringify(result.user));
+              localStorage.setItem("taskeru_token", result.sessionToken);
+
+              showMessage("Login berhasil! Mengalihkan...", "success");
+              setTimeout(() => {
+                window.location.href = "dashboard-2.html";
+              }, 1000);
+            } else {
+              showMessage(result.error || "Login gagal", "error");
+            }
+          } catch (error) {
+            console.error("Login error:", error);
+            showMessage("Terjadi kesalahan saat login", "error");
+          }
+        });
+
+        function showMessage(text, type) {
+          messageEl.textContent = text;
+          messageEl.className = `message ${type}`;
+          messageEl.style.display = "block";
+
+          // Auto hide success messages after 3 seconds
+          if (type === "success") {
+            setTimeout(() => {
+              messageEl.style.display = "none";
+            }, 3000);
+          }
         }
       });
-
-      function showMessage(text, type) {
-        messageEl.textContent = text;
-        messageEl.className = `message ${type}`;
-        messageEl.style.display = 'block';
-        
-        // Auto hide success messages after 3 seconds
-        if (type === 'success') {
-          setTimeout(() => {
-            messageEl.style.display = 'none';
-          }, 3000);
-        }
-      }
-    });
-  </script>
-</body>
+    </script>
+  </body>
 </html>
