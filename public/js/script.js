@@ -234,11 +234,20 @@ function getCurrentUser() {
   return user ? JSON.parse(user) : null;
 }
 
+// function getAuthHeaders() {
+//   const user = getCurrentUser();
+//   return {
+//     "Content-Type": "application/json",
+//     "X-User-Id": user?.id || "",
+//   };
+// }
+
 function getAuthHeaders() {
   const user = getCurrentUser();
+  console.log("🔐 Auth headers for user:", user?.id);
   return {
     "Content-Type": "application/json",
-    "X-User-Id": user?.id || "",
+    "X-User-Id": user?.id || "demo-user", // fallback untuk testing
   };
 }
 
