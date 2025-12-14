@@ -281,7 +281,6 @@ body{
   display:grid; 
   gap:2px; 
   padding:6px;
-  max-height: 500px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -930,7 +929,6 @@ body{
   }
 
   .group .list {
-    max-height: 300px;
     overflow-y: auto;
   }
 
