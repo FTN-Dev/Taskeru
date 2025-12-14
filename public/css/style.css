@@ -358,7 +358,7 @@ body{
 
 /* Improved form styles in modal */
 
-.modal-card .form-group input[type="date"]::-webkit-calendar-picker-indicator {
+.modal-card .form-group input::before {
   color: var(--text);
 }
 
