@@ -152,12 +152,12 @@ body{
 .quick-filters label:hover{color:var(--text)}
 .footer-controls{display:flex; gap:8px}
 
-.icon-btn, .ghost-btn, .danger-btn, .primary-btn{
+.icon-btn, .ghost-btn, .logout-btn, .danger-btn, .primary-btn{
   border:1px solid var(--border); background:transparent; color:var(--text);
   padding:8px 10px; border-radius:10px; cursor:pointer; transition: all 0.3s ease;
 }
 .icon-btn{padding:6px 8px}
-.ghost-btn:hover{background:rgba(255,255,255,0.05); transform: translateY(-1px);}
+.ghost-btn,.logout-btn:hover{background:rgba(255,255,255,0.05); transform: translateY(-1px);}
 .danger-btn{border-color:rgba(255,107,107,.3); color:#ffd6d6}
 .danger-btn:hover{background:rgba(255,107,107,.1); transform: translateY(-1px);}
 .primary-btn{
@@ -266,13 +266,13 @@ body{
   animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: var(--shadow);
   
-  /* Layout for fixed header + scrolling list */
+  /*Joice Yapplist Layout for fixed header + scrolling list */
   display: flex;
   flex-direction: column;
-  max-height: calc(80vh - 200px); /* User preference with syntax fix */
+  max-height: calc(100vh); /* User preference with syntax fix */
 }
 
-/* New wrapper for list */
+/*Joice Yapplist New wrapper for list */
 .todo-list {
   flex: 1;
   min-height: 0;
@@ -737,7 +737,7 @@ body{
 }
 
 /* logout button */
-.logout-btn {
+/* .logout-btn {
   background: var(--danger);
   color: white;
   padding: 8px 16px;
@@ -752,7 +752,7 @@ body{
   background: var(--danger);
   opacity: 0.9;
   transform: translateY(-1px);
-}
+} */
 
 /* ========= MOBILE FIXES ========= */
 @media (max-width: 900px) {
@@ -869,6 +869,7 @@ body{
 
   .icon-btn,
   .ghost-btn,
+  .logout-btn
   .danger-btn,
   .primary-btn {
     padding: 6px 8px;
