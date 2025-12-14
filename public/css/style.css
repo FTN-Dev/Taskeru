@@ -220,27 +220,31 @@ body{
 
 /* Styling scrollbar untuk task container */
 .task-container::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
 }
 
 .task-container::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  margin: 4px 0;
 }
 
 .task-container::-webkit-scrollbar-thumb {
-  background: var(--muted);
-  border-radius: 4px;
+  background: rgba(109, 142, 255, 0.4);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .task-container::-webkit-scrollbar-thumb:hover {
-  background: var(--text-weak);
+  background: rgba(109, 142, 255, 0.6);
+  background-clip: padding-box;
 }
 
 /* Untuk Firefox */
 .task-container {
-  scrollbar-width: thin;
-  scrollbar-color: var(--muted) rgba(255, 255, 255, 0.05);
+  scrollbar-width: auto;
+  scrollbar-color: rgba(109, 142, 255, 0.4) rgba(255, 255, 255, 0.08);
 }
 
 .group{
@@ -271,21 +275,22 @@ body{
 
 /* Styling scrollbar untuk group lists */
 .group .list::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .group .list::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  margin: 2px 0;
 }
 
 .group .list::-webkit-scrollbar-thumb {
-  background: var(--muted);
-  border-radius: 3px;
+  background: rgba(109, 142, 255, 0.3);
+  border-radius: 4px;
 }
 
 .group .list::-webkit-scrollbar-thumb:hover {
-  background: var(--text-weak);
+  background: rgba(109, 142, 255, 0.5);
 }
 
 .group.empty .list{padding:14px; color:var(--muted); max-height: none; overflow: visible;}

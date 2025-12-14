@@ -55,9 +55,6 @@
 
       <div class="section footer-controls">
         <button id="toggleTheme" class="ghost-btn">🌙 / ☀️</button>
-        <button id="exportJson" class="ghost-btn">Export</button>
-        <input id="importFile" type="file" accept="application/json" hidden />
-        <button id="importJson" class="ghost-btn">Import</button>
       </div>
     </aside>
 
@@ -98,16 +95,6 @@
           <a href="/login.html" class="logout-btn">Logout</a>
         </div>
       </header>
-
-      <section class="bulkbar" id="bulkBar" hidden>
-        <span id="selectedCount">0 selected</span>
-        <div class="actions">
-          <button id="bulkComplete" class="ghost-btn">Mark Done</button>
-          <button id="bulkMove" class="ghost-btn">Move to Project</button>
-          <button id="bulkDelete" class="danger-btn">Delete</button>
-          <button id="bulkClear" class="ghost-btn">Clear Selection</button>
-        </div>
-      </section>
 
       <section id="emptyState" class="empty">
         <div class="empty-card">
@@ -197,30 +184,9 @@
     </form>
   </dialog>
 
-  <!-- Project Move Modal -->
-  <dialog id="moveModal" class="modal">
-    <form id="moveForm" method="dialog" class="modal-card">
-      <header><h3>Pindah ke Project</h3></header>
-      <div class="form-group">
-        <label for="moveProjectSelect">Pilih Project</label>
-        <div class="custom-select">
-          <select id="moveProjectSelect">
-            <option value="inbox">Inbox (default)</option>
-          </select>
-          <span class="select-arrow">▼</span>
-        </div>
-      </div>
-      <footer>
-        <button type="button" class="ghost-btn" id="moveCancel">Batal</button>
-        <button type="submit" class="primary-btn" id="moveSave">Pindah</button>
-      </footer>
-    </form>
-  </dialog>
-
   <template id="taskItemTemplate">
     <div class="task">
       <div class="left">
-        <input class="selectBox" type="checkbox" title="Select for bulk" />
         <input class="checkBox" type="checkbox" title="Complete" />
         <div class="meta">
           <div class="title-row">
@@ -240,24 +206,7 @@
       </div>
     </div>
   </template>
-  <script src="js/script.js">
-    // Check authentication on dashboard load
-  document.addEventListener('DOMContentLoaded', function() {
-    const user = JSON.parse(localStorage.getItem('taskeru_user'));
-    if (!user) {
-      window.location.href = '/login.html';
-      return;
-    }
-    
-    // Handle logout
-    document.querySelector('.logout-btn').addEventListener('click', function(e) {
-      e.preventDefault();
-      localStorage.removeItem('taskeru_user');
-      localStorage.removeItem('taskeru_token');
-      localStorage.removeItem('taskeru_prefs');
-      window.location.href = '/login.html';
-    });
-  });
-  </script>
+  
+  <script src="js/script.js"></script>
 </body>
 </html>
