@@ -555,7 +555,7 @@ function renderAll() {
     const header = document.createElement("header");
     header.innerHTML = `<span>${label}&nbsp;</span><span>${arr.length} item</span>`;
 
-    const list = document.createElement("div");
+    const list = document.createElement("ul");
     list.className = "list";
 
     if (arr.length === 0) {
