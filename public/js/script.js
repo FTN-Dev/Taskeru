@@ -534,11 +534,12 @@ function renderAll() {
   // render
   els.taskContainer.innerHTML = "";
   const hasAny = items.length > 0;
-  els.emptyState.hidden = hasAny;
-  els.taskContainer.hidden = !hasAny;
+  
+  // Explicit display toggle
+  els.emptyState.style.display = hasAny ? "none" : "grid";
+  els.taskContainer.style.display = hasAny ? "flex" : "none";
 
-  console.log("👀 Empty state hidden:", els.emptyState.hidden);
-  console.log("👀 Task container hidden:", els.taskContainer.hidden);
+  console.log("👀 Empty state visible:", !hasAny);
 
   if (Object.keys(groups).length === 0) {
     console.log("ℹ️ No groups, creating default");
@@ -559,11 +560,8 @@ function renderAll() {
 
     if (arr.length === 0) {
       list.textContent = "Tidak ada tugas pada grup ini.";
-      list.style.maxHeight = "none";
-      list.style.overflow = "visible";
     } else {
-      list.style.maxHeight = "400px";
-      list.style.overflowY = "auto";
+      // Removed manual max-height/overflow overrides so CSS handles it
       arr.forEach((task) => {
         console.log("➕ Rendering task:", task.title);
         const taskEl = renderTask(task);
