@@ -278,34 +278,15 @@ body{
   background:rgba(255,255,255,0.02);
 }
 .group .list{
-  display:grid; 
-  gap:2px; 
-  padding:6px;
-  max-height: 500px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  padding: 0 10px; /* match reference */
   list-style: none; /* Reset ul style */
   margin: 0;
 }
 
-/* Styling scrollbar untuk group lists */
-.group .list::-webkit-scrollbar {
-  width: 8px;
-}
+/* Styling scrollbar removed for group list as it uses parent scroll */
 
-.group .list::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
-  margin: 2px 0;
-}
-
-.group .list::-webkit-scrollbar-thumb {
-  background: rgba(109, 142, 255, 0.3);
-  border-radius: 4px;
-}
-
-.group .list::-webkit-scrollbar-thumb:hover {
-  background: rgba(109, 142, 255, 0.5);
+.group .list li + li {
+   margin-top: 10px;
 }
 
 .group.empty .list{padding:14px; color:var(--muted); max-height: none; overflow: visible;}
@@ -932,7 +913,7 @@ body{
   }
 
   .group .list {
-    overflow-y: auto;
+    overflow-y: visible;
   }
 
   /* --- Bulk Bar --- */
