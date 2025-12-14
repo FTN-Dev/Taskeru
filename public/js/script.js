@@ -196,9 +196,6 @@ const els = {
   filterHigh: document.getElementById("filterHigh"),
   filterOverdue: document.getElementById("filterOverdue"),
   statsText: document.getElementById("statsText"),
-  exportJson: document.getElementById("exportJson"),
-  importJson: document.getElementById("importJson"),
-  importFile: document.getElementById("importFile"),
   // tabs
   tabs: Array.from(document.querySelectorAll(".tab")),
   // modal: task
@@ -829,65 +826,16 @@ function wireEvents() {
   });
 
   // sidebar mobile
-  els.sidebarToggle.addEventListener("click", () => {
+  els.sidebarToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
     els.sidebar.classList.toggle("open");
-  });
-
-  // export/import
-  els.exportJson.addEventListener("click", () => {
-    const data = {
-      tasks: db.tasks,
-      projects: db.projects.filter((p) => !p.builtin),
-      exportDate: new Date().toISOString(),
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `taskeru-backup-${todayStr()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  });
-
-  els.importJson.addEventListener("click", () => els.importFile.click());
-  els.importFile.addEventListener("change", async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (!confirm("Import data akan mengganti data yang ada. Lanjut?")) {
-      e.target.value = "";
-      return;
-    }
-
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      if (!data.tasks || !data.projects) throw new Error("Invalid file format");
-
-      Object.assign(db, data);
-      // Ensure inbox project exists
-      if (!db.projects.find((p) => p.id === "inbox")) {
-        db.projects.unshift({ id: "inbox", name: "Inbox", builtin: true });
-      }
-
-      save();
-      renderProjects();
-      renderAll();
-      alert(
-        `Berhasil import ${data.tasks.length} tasks dan ${data.projects.length} projects`
-      );
-    } catch (err) {
-      alert("Gagal import: " + err.message);
-    }
-    e.target.value = "";
   });
 
   // sidebar close
   const sidebarClose = document.getElementById("sidebarClose");
   if (sidebarClose) {
-    sidebarClose.addEventListener("click", () => {
+    sidebarClose.addEventListener("click", (e) => {
+      e.stopPropagation();
       els.sidebar.classList.remove("open");
     });
   }
@@ -896,6 +844,7 @@ function wireEvents() {
   document.addEventListener("click", (e) => {
     if (
       window.innerWidth <= 900 &&
+      els.sidebar.classList.contains("open") &&
       !els.sidebar.contains(e.target) &&
       !els.sidebarToggle.contains(e.target)
     ) {
