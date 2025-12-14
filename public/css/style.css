@@ -281,30 +281,10 @@ body{
   display:grid; 
   gap:2px; 
   padding:6px;
-  max-height: 500px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* Removed max-height and overflow so main container handles scrolling */
 }
 
-/* Styling scrollbar untuk group lists */
-.group .list::-webkit-scrollbar {
-  width: 8px;
-}
-
-.group .list::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
-  margin: 2px 0;
-}
-
-.group .list::-webkit-scrollbar-thumb {
-  background: rgba(109, 142, 255, 0.3);
-  border-radius: 4px;
-}
-
-.group .list::-webkit-scrollbar-thumb:hover {
-  background: rgba(109, 142, 255, 0.5);
-}
+/* Styling scrollbar removed for group list as it uses parent scroll */
 
 .group.empty .list{padding:14px; color:var(--muted); max-height: none; overflow: visible;}
 .group.empty header{opacity:.9}
@@ -930,7 +910,7 @@ body{
   }
 
   .group .list {
-    max-height: 300px;
+    max-height: none;
   }
 
   /* --- Bulk Bar --- */
