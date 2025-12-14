@@ -157,7 +157,7 @@ body{
   padding:8px 10px; border-radius:10px; cursor:pointer; transition: all 0.3s ease;
 }
 .icon-btn{padding:6px 8px}
-.ghost-btn,.logout-btn:hover{background:rgba(255,255,255,0.05); transform: translateY(-1px);}
+.ghost-btn:hover,.logout-btn:hover{background:rgba(255,255,255,0.05); transform: translateY(-1px);}
 .danger-btn{border-color:rgba(255,107,107,.3); color:#ffd6d6}
 .danger-btn:hover{background:rgba(255,107,107,.1); transform: translateY(-1px);}
 .primary-btn{
