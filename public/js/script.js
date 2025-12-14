@@ -555,6 +555,9 @@ function renderAll() {
     const header = document.createElement("header");
     header.innerHTML = `<span>${label}&nbsp;</span><span>${arr.length} item</span>`;
 
+    const wrapper = document.createElement("div");
+    wrapper.className = "todo-list";
+
     const list = document.createElement("ul");
     list.className = "list";
 
@@ -570,7 +573,8 @@ function renderAll() {
     }
 
     group.appendChild(header);
-    group.appendChild(list);
+    wrapper.appendChild(list);
+    group.appendChild(wrapper);
     els.taskContainer.appendChild(group);
   });
 

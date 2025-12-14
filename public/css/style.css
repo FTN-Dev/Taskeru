@@ -266,13 +266,17 @@ body{
   animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: var(--shadow);
   
-  /* test from joice yapplist */
+  /* Layout for fixed header + scrolling list */
   display: flex;
   flex-direction: column;
+  max-height: calc(80vh - 200px); /* User preference with syntax fix */
+}
+
+/* New wrapper for list */
+.todo-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  max-height: calc(80vh-200px);
 }
 
 @keyframes slideUp {
