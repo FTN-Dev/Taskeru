@@ -210,11 +210,6 @@ const els = {
   projectName: document.getElementById("projectName"),
   projectCancel: document.getElementById("projectCancel"),
   projectSave: document.getElementById("projectSave"),
-  // modal: move
-  moveModal: document.getElementById("moveModal"),
-  moveProjectSelect: document.getElementById("moveProjectSelect"),
-  moveCancel: document.getElementById("moveCancel"),
-  moveSave: document.getElementById("moveSave"),
   // template
   taskItemTemplate: document.getElementById("taskItemTemplate"),
 };
@@ -297,15 +292,6 @@ function renderProjects() {
     opt.value = p.id;
     opt.textContent = p.name + (p.builtin ? " (default)" : "");
     els.taskProject.appendChild(opt);
-  });
-
-  // fill move project select
-  els.moveProjectSelect.innerHTML = "";
-  db.projects.forEach((p) => {
-    const opt = document.createElement("option");
-    opt.value = p.id;
-    opt.textContent = p.name;
-    els.moveProjectSelect.appendChild(opt);
   });
 
   // sidebar list
@@ -739,12 +725,6 @@ function wireEvents() {
       e.preventDefault();
       els.searchInput.focus();
     }
-    if (e.key === "Escape") {
-      if (state.selection.size > 0) {
-        state.selection.clear();
-        updateBulkBar();
-      }
-    }
   });
 
   // task modal
@@ -755,10 +735,6 @@ function wireEvents() {
   els.addProjectBtn.addEventListener("click", () => openProjectModal());
   els.projectCancel.addEventListener("click", () => els.projectModal.close());
   els.projectForm.addEventListener("submit", onProjectSave);
-
-  // move modal
-  els.moveCancel.addEventListener("click", () => els.moveModal.close());
-  els.moveForm.addEventListener("submit", onBulkMoveSave);
 
   // clear completed
   els.clearCompleted.addEventListener("click", () => {
@@ -827,12 +803,6 @@ function updateStats() {
   }
 
   els.statsText.textContent = stats;
-}
-
-function updateBulkBar() {
-  const n = state.selection.size;
-  els.selectedCount.textContent = `${n} selected`;
-  els.bulkBar.hidden = n === 0;
 }
 
 function openTaskModal(task = null) {
@@ -990,72 +960,6 @@ async function onProjectSave(e) {
     save();
     renderProjects();
     els.projectModal.close();
-  }
-}
-
-function openBulkMoveModal() {
-  // Fill project select for bulk move
-  renderProjects();
-  els.moveModal.showModal();
-}
-
-async function onBulkMoveSave(e) {
-  e.preventDefault();
-  const projectId = els.moveProjectSelect.value;
-
-  if (!projectId) {
-    alert("Pilih project terlebih dahulu!");
-    return;
-  }
-
-  console.log("🚚 Bulk moving tasks to project:", projectId);
-
-  try {
-    const updatePromises = [];
-    const selectedTasks = db.tasks.filter((t) => state.selection.has(t.id));
-
-    // Update di server
-    selectedTasks.forEach((t) => {
-      updatePromises.push(
-        fetch(`/api/tasks?id=${t.id}`, {
-          method: "PUT",
-          headers: getAuthHeaders(),
-          body: JSON.stringify({ project: projectId }),
-        }).catch((err) => {
-          console.error(`Failed to update task ${t.id}:`, err);
-        })
-      );
-    });
-
-    await Promise.all(updatePromises);
-
-    // Update local data
-    db.tasks.forEach((t) => {
-      if (state.selection.has(t.id)) {
-        t.project = projectId;
-        t.updatedAt = Date.now();
-      }
-    });
-
-    await save();
-    els.moveModal.close();
-    renderAll();
-
-    console.log("✅ Bulk move completed");
-  } catch (error) {
-    console.error("❌ Error moving tasks:", error);
-    alert("Gagal memindahkan tasks: " + error.message);
-
-    // Fallback ke localStorage
-    db.tasks.forEach((t) => {
-      if (state.selection.has(t.id)) {
-        t.project = projectId;
-        t.updatedAt = Date.now();
-      }
-    });
-    await save();
-    els.moveModal.close();
-    renderAll();
   }
 }
 
