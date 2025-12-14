@@ -271,6 +271,8 @@ body{
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  max-height: calc(80vh-200px);
 }
 
 @keyframes slideUp {
@@ -286,7 +288,6 @@ body{
 .group .list{
   padding: 0 10px; /* match reference */
   list-style: none; /* Reset ul style */
-  margin: 0;
 }
 
 /* Styling scrollbar removed for group list as it uses parent scroll */
