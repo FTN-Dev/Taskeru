@@ -29,11 +29,13 @@ module.exports = async (req, res) => {
 
     if (req.method === "GET") {
       // Get all tasks for user
+      console.log("📥 Fetching tasks for user:", userId);
+      
       const { data, error } = await supabase
         .from("tasks")
         .select("*")
         .eq("user_id", userId)
-        .order("created_at", { ascending: false });
+        .order("id", { ascending: false });
 
       if (error) {
         console.error("Get tasks error:", error);
@@ -67,6 +69,7 @@ module.exports = async (req, res) => {
         updatedAt: task.updated_at,
       }));
 
+      console.log("✅ Returning", formattedTasks.length, "tasks");
       res.json(formattedTasks);
     }
 

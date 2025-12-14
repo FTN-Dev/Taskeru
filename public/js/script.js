@@ -499,11 +499,56 @@ function renderAll() {
   let items = db.tasks.slice();
   console.log("📋 Initial items:", items.length);
 
-  // ... rest of filtering logic ...
+  // tab filters
+  const today = todayStr();
+  if (state.tab === "today")
+    items = items.filter((t) => (t.due || "") === today && !t.completed);
+  if (state.tab === "upcoming")
+    items = items.filter((t) => (t.due || "") > today && !t.completed);
+  if (state.tab === "completed") items = items.filter((t) => t.completed);
+  if (state.tab === "all") items = items;
 
-  // Debug setelah filter
+  // quick filters
+  if (state.filterHigh) items = items.filter((t) => t.priority === 3);
+  if (state.filterOverdue)
+    items = items.filter((t) => t.due && t.due < today && !t.completed);
+
+  // search / query: support "project:ID" and plain text
+  const q = (state.query || "").trim().toLowerCase();
+  if (q) {
+    if (q.startsWith("project:")) {
+      const pid = q.split(":")[1];
+      items = items.filter((t) => t.project === pid);
+    } else {
+      items = items.filter(
+        (t) =>
+          t.title.toLowerCase().includes(q) ||
+          (t.desc && t.desc.toLowerCase().includes(q))
+      );
+    }
+  }
+
+  // sort
+  items.sort((a, b) => {
+    switch (state.sort) {
+      case "created_desc":
+        return b.createdAt - a.createdAt;
+      case "created_asc":
+        return a.createdAt - b.createdAt;
+      case "due_asc":
+        return (a.due || "9999-12-31").localeCompare(b.due || "9999-12-31");
+      case "due_desc":
+        return (b.due || "0000-01-01").localeCompare(a.due || "0000-01-01");
+      case "priority_desc":
+        return b.priority - a.priority;
+      case "priority_asc":
+        return a.priority - b.priority;
+      default:
+        return 0;
+    }
+  });
+
   console.log("🔍 After filtering:", items.length, "items");
-  console.log("🔍 Filtered items:", items);
 
   // group
   const groups = groupItems(items, state.group);
