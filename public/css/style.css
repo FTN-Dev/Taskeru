@@ -229,6 +229,7 @@ body{
   padding:16px;
   display:flex;
   flex-direction:column;
+  justify-content: flex-end; /* Tasks appear at bottom */
   gap:18px;
 }
 
