@@ -552,7 +552,7 @@ function renderAll() {
     group.className = "group" + (arr.length === 0 ? " empty" : "");
 
     const header = document.createElement("header");
-    header.innerHTML = `<span>${label}</span><span>${arr.length} item</span>`;
+    header.innerHTML = `<span>${label} </span><span>${arr.length} item</span>`;
 
     const list = document.createElement("div");
     list.className = "list";
