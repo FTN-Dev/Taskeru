@@ -281,7 +281,7 @@ body{
   display:grid; 
   gap:2px; 
   padding:6px;
-  max-height: 500px;
+  max-height: none;
   overflow-y: auto;
   overflow-x: hidden;
 }
