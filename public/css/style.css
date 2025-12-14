@@ -737,6 +737,12 @@ body{
 }
 
 /* logout button */
+
+.logout-btn {
+  text-decoration: none;
+  align-items: center;
+}
+
 /* .logout-btn {
   background: var(--danger);
   color: white;
