@@ -152,7 +152,7 @@ body{
 .quick-filters label:hover{color:var(--text)}
 .footer-controls{display:flex; gap:8px}
 
-.icon-btn, .ghost-btn, .logout-btn-text, .danger-btn, .primary-btn{
+.icon-btn, .ghost-btn, .logout-btn, .danger-btn, .primary-btn{
   border:1px solid var(--border); background:transparent; color:var(--text);
   padding:8px 10px; border-radius:10px; cursor:pointer; transition: all 0.3s ease;
 }
@@ -740,6 +740,7 @@ body{
 
 .logout-btn-text {
   text-decoration: none;
+  color: var(--text);
 }
 
 /* .logout-btn {
