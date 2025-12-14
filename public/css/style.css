@@ -219,7 +219,8 @@ body{
   display:flex; 
   flex-direction:column; 
   gap:18px;
-  min-height: 0;
+  height: 100%;
+  max-height: 100%;
 }
 
 /* Styling scrollbar untuk task container */
@@ -914,7 +915,8 @@ body{
   .task-container {
     padding: 12px;
     gap: 12px;
-    min-height: 0;
+    height: 100%;
+    max-height: 100%;
   }
 
   .group .list {
