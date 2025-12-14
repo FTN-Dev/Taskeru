@@ -304,6 +304,10 @@ body{
   display: block;
 }
 
+.group .list .task .right{
+  display: block;
+}
+
 .group.empty .list{padding:14px; color:var(--muted); max-height: none; overflow: visible;}
 .group.empty header{opacity:.9}
 
