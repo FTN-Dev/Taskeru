@@ -300,6 +300,10 @@ body{
    margin-top: 10px;
 }
 
+.group .list .task .left .meta .title-row{
+  display: block;
+}
+
 .group.empty .list{padding:14px; color:var(--muted); max-height: none; overflow: visible;}
 .group.empty header{opacity:.9}
 
@@ -357,10 +361,6 @@ body{
 .modal-card .row{display:grid; grid-template-columns: repeat(3, 1fr); gap:12px}
 
 /* Improved form styles in modal */
-
-.modal-card .form-group input::before {
-  color: var(--text);
-}
 
 .modal-card .form-group {
   display: flex;
