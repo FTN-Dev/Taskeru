@@ -265,6 +265,7 @@ body{
   background:linear-gradient(180deg, rgba(109,142,255,0.03), transparent 50%), var(--panel);
   animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: var(--shadow);
+  max-height: 800px;
 }
 
 @keyframes slideUp {
@@ -281,7 +282,7 @@ body{
   display:grid; 
   gap:2px; 
   padding:6px;
-  max-height: 300px;
+  max-height: 500px;
   overflow-y: auto;
   overflow-x: hidden;
 }
