@@ -167,12 +167,15 @@ body{
 .primary-btn:hover{background:var(--primary-weak); transform: translateY(-1px); box-shadow:0 8px 25px rgba(109,142,255,.3);}
 
 .main{
-  display:flex; 
-  flex-direction:column;
-  height:100vh; 
-  overflow:hidden;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 1fr;
+  height: 100vh;
+  overflow: hidden;
 }
+
 .topbar{
+  grid-row: 1;
   flex-shrink: 0;
   display:flex; align-items:center; justify-content:space-between; gap:12px;
   padding:12px 16px; border-bottom:1px solid var(--border); background:var(--panel);
@@ -199,7 +202,13 @@ body{
   to { transform: translateY(0); opacity: 1; }
 }
 
-.empty{display:grid; place-items:center; padding:40px; flex-shrink:0;}
+.empty{
+  grid-row: 2;
+  display:grid;
+  place-items:center;
+  padding:40px;
+  overflow: auto;
+}
 .empty-card{
   text-align:center; background:var(--panel); border:1px solid var(--border);
   border-radius:16px; padding:24px 28px; color:var(--text-weak); animation: fadeIn 0.5s ease;
@@ -212,24 +221,14 @@ body{
 
 .empty-card .big{font-size:36px; margin-bottom:6px}
 
-/* Content Wrapper - critical for scroll */
-.content-wrapper {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0; /* penting agar scroll bekerja */
-  overflow: hidden;
-}
-
 /* Task Container dengan Scroll */
 .task-container{
-  flex: 1;
-  min-height: 0;
+  grid-row: 2;
   overflow-y: auto;
   overflow-x: hidden;
-  padding:16px; 
-  display:flex; 
-  flex-direction:column; 
+  padding:16px;
+  display:flex;
+  flex-direction:column;
   gap:18px;
 }
 
@@ -339,6 +338,7 @@ body{
 .task .badge.p3{background:rgba(255,107,107,.12); color:var(--danger);}
 
 .bottombar{
+  grid-row: 3;
   flex-shrink: 0;
   display:flex; justify-content:space-between; align-items:center;
   padding:12px 16px; border-top:1px solid var(--border); background:var(--panel); color:var(--muted)
