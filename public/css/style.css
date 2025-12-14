@@ -212,6 +212,15 @@ body{
 
 .empty-card .big{font-size:36px; margin-bottom:6px}
 
+/* Content Wrapper - critical for scroll */
+.content-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0; /* penting agar scroll bekerja */
+  overflow: hidden;
+}
+
 /* Task Container dengan Scroll */
 .task-container{
   flex: 1;
