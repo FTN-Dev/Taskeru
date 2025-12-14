@@ -357,6 +357,11 @@ body{
 .modal-card .row{display:grid; grid-template-columns: repeat(3, 1fr); gap:12px}
 
 /* Improved form styles in modal */
+
+.modal-card .form-group input::-webkit-calendar-picker-indicator {
+  color: var(--text);
+}
+
 .modal-card .form-group {
   display: flex;
   flex-direction: column;
