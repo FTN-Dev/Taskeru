@@ -765,20 +765,20 @@ body{
   }
 
   /* Sidebar backdrop */
-  .sidebar::before {
+  .sidebar::after {
     content: '';
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
     opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
     z-index: -1;
   }
 
-  .sidebar.open::before {
+  .sidebar.open::after {
     opacity: 1;
-    pointer-events: auto;
+    visibility: visible;
   }
 
   .sidebar-header {

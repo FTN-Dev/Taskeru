@@ -187,12 +187,6 @@ const els = {
   taskContainer: document.getElementById("taskContainer"),
   emptyState: document.getElementById("emptyState"),
   clearCompleted: document.getElementById("clearCompleted"),
-  bulkBar: document.getElementById("bulkBar"),
-  selectedCount: document.getElementById("selectedCount"),
-  bulkComplete: document.getElementById("bulkComplete"),
-  bulkMove: document.getElementById("bulkMove"),
-  bulkDelete: document.getElementById("bulkDelete"),
-  bulkClear: document.getElementById("bulkClear"),
   filterHigh: document.getElementById("filterHigh"),
   filterOverdue: document.getElementById("filterOverdue"),
   statsText: document.getElementById("statsText"),
@@ -596,7 +590,6 @@ function renderAll() {
     els.taskContainer.appendChild(group);
   });
 
-  updateBulkBar();
   updateStats();
 
   console.log("✅ Render completed");
@@ -638,7 +631,6 @@ function renderTask(t) {
   const root = tpl;
   if (t.completed) root.classList.add("completed");
 
-  const sel = root.querySelector(".selectBox");
   const cb = root.querySelector(".checkBox");
   const title = root.querySelector(".title");
   const badge = root.querySelector(".badge.priority");
@@ -646,14 +638,6 @@ function renderTask(t) {
   const project = root.querySelector(".project");
   const editBtn = root.querySelector(".editBtn");
   const delBtn = root.querySelector(".delBtn");
-
-  // selection
-  sel.checked = state.selection.has(t.id);
-  sel.addEventListener("change", () => {
-    if (sel.checked) state.selection.add(t.id);
-    else state.selection.delete(t.id);
-    updateBulkBar();
-  });
 
   // complete checkbox
   cb.checked = t.completed;
@@ -780,41 +764,8 @@ function wireEvents() {
   els.clearCompleted.addEventListener("click", () => {
     const before = db.tasks.length;
     db.tasks = db.tasks.filter((t) => !t.completed);
-    state.selection.clear();
     if (db.tasks.length !== before) save();
     renderAll();
-  });
-
-  // bulk actions
-  els.bulkComplete.addEventListener("click", () => {
-    db.tasks.forEach((t) => {
-      if (state.selection.has(t.id)) {
-        t.completed = true;
-        t.updatedAt = Date.now();
-      }
-    });
-    save();
-    renderAll();
-  });
-
-  els.bulkMove.addEventListener("click", openBulkMoveModal);
-
-  els.bulkDelete.addEventListener("click", () => {
-    if (!confirm(`Hapus ${state.selection.size} tugas terpilih?`)) return;
-
-    // Convert Set to Array for safe iteration
-    const selectedIds = Array.from(state.selection);
-    selectedIds.forEach((taskId) => {
-      deleteTask(taskId, false); // false = jangan renderAll setiap kali
-    });
-
-    state.selection.clear();
-    renderAll(); // Render sekali saja setelah semua delete selesai
-  });
-
-  els.bulkClear.addEventListener("click", () => {
-    state.selection.clear();
-    updateBulkBar();
   });
 
   // theme
