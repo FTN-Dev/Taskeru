@@ -152,12 +152,12 @@ body{
 .quick-filters label:hover{color:var(--text)}
 .footer-controls{display:flex; gap:8px}
 
-.icon-btn, .ghost-btn, .logout-btn, .danger-btn, .primary-btn{
+.icon-btn, .ghost-btn, .logout-btn-text, .danger-btn, .primary-btn{
   border:1px solid var(--border); background:transparent; color:var(--text);
   padding:8px 10px; border-radius:10px; cursor:pointer; transition: all 0.3s ease;
 }
 .icon-btn{padding:6px 8px}
-.ghost-btn,.logout-btn:hover{background:rgba(255,255,255,0.05); transform: translateY(-1px);}
+.ghost-btn,.logout-btn-text:hover{background:rgba(255,255,255,0.05); transform: translateY(-1px);}
 .danger-btn{border-color:rgba(255,107,107,.3); color:#ffd6d6}
 .danger-btn:hover{background:rgba(255,107,107,.1); transform: translateY(-1px);}
 .primary-btn{
@@ -738,9 +738,8 @@ body{
 
 /* logout button */
 
-.logout-btn {
+.logout-btn-text {
   text-decoration: none;
-  align-items: center;
 }
 
 /* .logout-btn {
