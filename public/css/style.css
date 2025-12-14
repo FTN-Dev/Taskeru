@@ -167,15 +167,13 @@ body{
 .primary-btn:hover{background:var(--primary-weak); transform: translateY(-1px); box-shadow:0 8px 25px rgba(109,142,255,.3);}
 
 .main{
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  grid-template-columns: 1fr;
-  height: 100vh;
-  overflow: hidden;
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  overflow:hidden;
 }
 
 .topbar{
-  grid-row: 1;
   flex-shrink: 0;
   display:flex; align-items:center; justify-content:space-between; gap:12px;
   padding:12px 16px; border-bottom:1px solid var(--border); background:var(--panel);
@@ -203,7 +201,7 @@ body{
 }
 
 .empty{
-  grid-row: 2;
+  flex: 1;
   display:grid;
   place-items:center;
   padding:40px;
@@ -223,13 +221,13 @@ body{
 
 /* Task Container dengan Scroll */
 .task-container{
-  grid-row: 2;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding:16px;
   display:flex;
   flex-direction:column;
-  justify-content: flex-end; /* Tasks appear at bottom */
   gap:18px;
 }
 
