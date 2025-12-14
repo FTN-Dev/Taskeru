@@ -265,6 +265,12 @@ body{
   background:linear-gradient(180deg, rgba(109,142,255,0.03), transparent 50%), var(--panel);
   animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: var(--shadow);
+  
+  /* test from joice yapplist */
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 @keyframes slideUp {
