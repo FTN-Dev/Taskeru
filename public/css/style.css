@@ -327,8 +327,8 @@ body{
 
 .task .right {
   display: flex;
-  flex-direction: column; /* Stack buttons vertically */
-  gap: 4px;
+  flex-direction: row; /* Side-by-side buttons */
+  gap: 8px;
   flex-shrink: 0; /* Prevent buttons from being squished */
   margin-left: 8px;
 }
