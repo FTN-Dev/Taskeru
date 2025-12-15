@@ -300,14 +300,6 @@ body{
    margin-top: 10px;
 }
 
-.group .list .task .left .meta .title-row{
-  display: block;
-}
-
-.group .list .task .right{
-  display: block;
-}
-
 .group.empty .list{padding:14px; color:var(--muted); max-height: none; overflow: visible;}
 .group.empty header{opacity:.9}
 
@@ -323,10 +315,37 @@ body{
 }
 
 .task:hover{background:rgba(255,255,255,0.04); transform: translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,0.1);}
-.task .left{display:flex; align-items:flex-start; gap:12px}
-.task .meta .title-row{display:flex; gap:8px; align-items:center}
-.task .title{
-  font-weight:600; max-width:56vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+
+/* Robust Flex Layout for Task Items */
+.task .left {
+  flex: 1; /* Take available space */
+  min-width: 0; /* Allow shrinking for text ellipsis */
+  display: flex; 
+  align-items: flex-start; 
+  gap: 12px;
+}
+
+.task .right {
+  display: flex;
+  flex-direction: column; /* Stack buttons vertically */
+  gap: 4px;
+  flex-shrink: 0; /* Prevent buttons from being squished */
+  margin-left: 8px;
+}
+
+.task .meta .title-row {
+  display: flex; 
+  gap: 8px; 
+  align-items: center; 
+  flex-wrap: wrap; /* Allow badge to wrap if needed */
+}
+
+.task .title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%; /* Adapt to flexible parent */
 }
 .task.completed .title{ text-decoration: line-through; color:var(--muted)}
 .task .sub{color:var(--muted); font-size:12px; display:flex; gap:6px; align-items:center}
