@@ -927,6 +927,7 @@ body{
 
   .topbar .left {
     gap: 8px;
+    flex: 1; /* Allow search to take space */
   }
 
   .topbar .right {
@@ -935,19 +936,20 @@ body{
     justify-content: flex-end;
   }
 
+  .selects {
+    display: none;
+  }
+  
+  .search {
+    flex: 1;
+  }
+
   .search input {
     width: 100%;
-    max-width: 180px;
+    max-width: none; /* Let it fill available space */
+    min-width: 120px;
     padding: 8px 10px;
     font-size: 12px;
-  }
-
-  .selects {
-    gap: 6px;
-  }
-
-  .selects .custom-select {
-    min-width: 140px;
   }
 
   /* --- Task Container Mobile --- */
